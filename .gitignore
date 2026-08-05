@@ -1,10 +1,9 @@
 node_modules/
 dist/
-.next/
-.vinext/
-.wrangler/
 *.tsbuildinfo
 .DS_Store
 *.log
 .env*
 !.env.example
+var/*
+!var/.gitkeep

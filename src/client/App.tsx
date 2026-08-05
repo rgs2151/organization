@@ -1,15 +1,23 @@
 import {
   Fragment,
+  useEffect,
   useMemo,
+  useRef,
   useState,
   type CSSProperties,
   type DragEvent,
   type FormEvent,
 } from "react";
+import * as api from "./api";
+import {
+  type ActionColor,
+  type OrganizationAction,
+  type OrganizationSession,
+  type UpdateActionInput,
+} from "../shared/contracts";
 
 type ViewMode = "week" | "month" | "year";
 type AppTab = "actions" | "journal" | "activity";
-type ActionColor = "plain" | "sun" | "mint" | "lilac" | "rose";
 type ActionLayout = "vertical" | "wrapped";
 
 type DropTarget = {
@@ -17,16 +25,9 @@ type DropTarget = {
   beforeId?: string;
 };
 
-type CalendarAction = {
-  id: string;
-  title: string;
-  date: string | null;
-  notes: string;
-  completed: boolean;
-  color: ActionColor;
-};
+type CalendarAction = OrganizationAction;
 
-const ACTION_COLORS: Record<ActionColor, string> = {
+const ACTION_COLOR_VALUES: Record<ActionColor, string> = {
   plain: "transparent",
   sun: "#ffea63",
   mint: "#65edac",
@@ -48,121 +49,6 @@ const MONTHS = [
   "October",
   "November",
   "December",
-];
-
-const INITIAL_ACTIONS: CalendarAction[] = [
-  {
-    id: "a-01",
-    title: "Get eyes checked",
-    date: "2026-08-05",
-    notes: "Call the clinic and ask for the first appointment after lunch.",
-    completed: false,
-    color: "mint",
-  },
-  {
-    id: "a-02",
-    title: "Finish Ian's updates",
-    date: "2026-08-05",
-    notes: "Review the final comments before sending the update.",
-    completed: false,
-    color: "plain",
-  },
-  {
-    id: "a-03",
-    title: "Organize legal documents",
-    date: "2026-08-05",
-    notes: "Move the signed copies into one folder and name them consistently.",
-    completed: false,
-    color: "lilac",
-  },
-  {
-    id: "a-04",
-    title: "Get my W-2s",
-    date: "2026-08-06",
-    notes: "Download both employers' copies and save them with tax documents.",
-    completed: false,
-    color: "sun",
-  },
-  {
-    id: "a-05",
-    title: "Book appointment for myself",
-    date: "2026-08-06",
-    notes: "Check the provider portal first, then call if no times appear.",
-    completed: false,
-    color: "plain",
-  },
-  {
-    id: "a-06",
-    title: "Renew the electricity contract",
-    date: "2026-08-07",
-    notes: "Compare the renewal rate with the current statement.",
-    completed: false,
-    color: "rose",
-  },
-  {
-    id: "a-07",
-    title: "Pay rent",
-    date: "2026-08-07",
-    notes: "Confirm the payment posts before the weekend.",
-    completed: true,
-    color: "plain",
-  },
-  {
-    id: "a-08",
-    title: "Write my one-year, five-year, and ten-year plan",
-    date: "2026-08-09",
-    notes: "Start with the direction, not a perfect list of milestones.",
-    completed: false,
-    color: "lilac",
-  },
-  {
-    id: "a-09",
-    title: "Return Amazon phone arm",
-    date: "2026-08-03",
-    notes: "Print the return label and take it downstairs.",
-    completed: true,
-    color: "plain",
-  },
-  {
-    id: "a-10",
-    title: "Call Erfan",
-    date: "2026-08-03",
-    notes: "Check timing for the next meeting.",
-    completed: true,
-    color: "mint",
-  },
-  {
-    id: "a-11",
-    title: "Understand cross-dataset results",
-    date: "2026-07-29",
-    notes: "Write down the two patterns that still need an explanation.",
-    completed: true,
-    color: "sun",
-  },
-  {
-    id: "a-12",
-    title: "Find a better system for recurring bills",
-    date: null,
-    notes: "No urgency. Capture options when they come up.",
-    completed: false,
-    color: "plain",
-  },
-  {
-    id: "a-13",
-    title: "Plan the Notion calendar migration",
-    date: null,
-    notes: "Wait until the new action model is stable.",
-    completed: false,
-    color: "lilac",
-  },
-  {
-    id: "a-14",
-    title: "Research a quiet weekend trip",
-    date: null,
-    notes: "Keep this fun and unhurried.",
-    completed: false,
-    color: "mint",
-  },
 ];
 
 const pad = (value: number) => String(value).padStart(2, "0");
@@ -256,7 +142,7 @@ function ActionItem({
   onDropAt: (event: DragEvent<HTMLDivElement>, draggedId: string) => void;
 }) {
   const style = {
-    "--action-color": ACTION_COLORS[action.color],
+    "--action-color": ACTION_COLOR_VALUES[action.color],
   } as CSSProperties;
 
   return (
@@ -338,28 +224,20 @@ function ActionComposer({
 }
 
 function AccountControl({
-  signedIn,
-  onSignIn,
-  onSignOut,
+  session,
 }: {
-  signedIn: boolean;
-  onSignIn: () => void;
-  onSignOut: () => void;
+  session: OrganizationSession;
 }) {
-  if (!signedIn) {
-    return <button className="sign-in-button" type="button" onClick={onSignIn}>Sign in</button>;
-  }
-
+  const { user } = session;
   return (
     <details className="account-menu">
-      <summary aria-label="Open Rudra account menu">
-        <span className="account-name">Rudra</span>
-        <span className="account-avatar" aria-hidden="true">R</span>
+      <summary aria-label={`Open ${user.displayName} account menu`}>
+        <span className="account-name">{user.displayName}</span>
+        <span className="account-avatar" aria-hidden="true">{user.displayName.slice(0, 1).toUpperCase()}</span>
       </summary>
       <div className="account-popover">
-        <strong>Rudra</strong>
-        <span>rgs2151@columbia.edu</span>
-        <button type="button" onClick={onSignOut}>Sign out</button>
+        <strong>{user.displayName}</strong>
+        <span>{user.email}</span>
       </div>
     </details>
   );
@@ -373,7 +251,7 @@ function ActionPage({
 }: {
   action: CalendarAction;
   onClose: () => void;
-  onChange: (patch: Partial<CalendarAction>) => void;
+  onChange: (patch: UpdateActionInput) => void;
   onDelete: () => void;
 }) {
   return (
@@ -413,12 +291,12 @@ function ActionPage({
           <div className="color-field">
             <span>Color</span>
             <div className="color-options" aria-label="Action color">
-              {(Object.keys(ACTION_COLORS) as ActionColor[]).map((color) => (
+              {(Object.keys(ACTION_COLOR_VALUES) as ActionColor[]).map((color) => (
                 <button
                   key={color}
                   type="button"
                   className={action.color === color ? "is-selected" : ""}
-                  style={{ background: color === "plain" ? "#f7f7f3" : ACTION_COLORS[color] }}
+                  style={{ background: color === "plain" ? "#f7f7f3" : ACTION_COLOR_VALUES[color] }}
                   aria-label={`Use ${color} color`}
                   aria-pressed={action.color === color}
                   onClick={() => onChange({ color })}
@@ -465,8 +343,9 @@ function ActivityHeatmap({
   const completedByDate = useMemo(() => {
     const result = new Map<string, number>();
     actions.forEach((action) => {
-      if (action.completed && action.date?.startsWith(String(year))) {
-        result.set(action.date, (result.get(action.date) ?? 0) + 1);
+      const completedDate = action.completedAt?.slice(0, 10);
+      if (action.completed && completedDate?.startsWith(String(year))) {
+        result.set(completedDate, (result.get(completedDate) ?? 0) + 1);
       }
     });
     return result;
@@ -479,9 +358,7 @@ function ActivityHeatmap({
       const date = addDays(gridStart, index);
       if (date.getFullYear() !== year) return { key: `empty-${index}`, date: null, count: 0, level: 0 };
       const key = toDateKey(date);
-      const pulse = (index * 19 + year * 7 + date.getMonth() * 13) % 41;
-      const backgroundCount = pulse > 34 ? 3 : pulse > 27 ? 2 : pulse > 20 ? 1 : 0;
-      const count = Math.max(backgroundCount, completedByDate.get(key) ?? 0);
+      const count = completedByDate.get(key) ?? 0;
       return { key, date, count, level: Math.min(4, count) };
     });
   }, [completedByDate, year]);
@@ -533,14 +410,40 @@ function ActivityHeatmap({
 export default function App() {
   const [tab, setTab] = useState<AppTab>("actions");
   const [view, setView] = useState<ViewMode>("week");
-  const [focusDate, setFocusDate] = useState(new Date(2026, 7, 5));
-  const [actions, setActions] = useState(INITIAL_ACTIONS);
+  const [focusDate, setFocusDate] = useState(new Date());
+  const [actions, setActions] = useState<CalendarAction[]>([]);
+  const [session, setSession] = useState<OrganizationSession | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [serverError, setServerError] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [composerTarget, setComposerTarget] = useState<{ target: string; index?: number } | null>(null);
   const [activityYear, setActivityYear] = useState(2026);
   const [draggedId, setDraggedId] = useState<string | null>(null);
   const [dropTarget, setDropTarget] = useState<DropTarget | null>(null);
-  const [signedIn, setSignedIn] = useState(true);
+  const pendingPatches = useRef(new Map<string, UpdateActionInput>());
+  const patchTimers = useRef(new Map<string, number>());
+
+  useEffect(() => {
+    let active = true;
+    api.loadApplication()
+      .then((application) => {
+        if (!active) return;
+        setSession(application.session);
+        setActions(application.actions);
+        setServerError(null);
+      })
+      .catch((error: unknown) => {
+        if (active) setServerError(errorMessage(error));
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+
+    return () => {
+      active = false;
+      patchTimers.current.forEach((timer) => window.clearTimeout(timer));
+    };
+  }, []);
 
   const selectedAction = actions.find((action) => action.id === selectedId) ?? null;
 
@@ -548,44 +451,61 @@ export default function App() {
     return actions.filter((action) => action.date === date);
   }
 
-  function addAction(target: string, title: string, insertIndex?: number) {
-    const newAction: CalendarAction = {
-      id: `action-${Date.now()}`,
-      title,
-      date: target === "someday" ? null : target,
-      notes: "",
-      completed: false,
-      color: "plain",
-    };
-    setActions((current) => {
-      const targetDate = newAction.date;
-      const targetActions = current.filter((action) => action.date === targetDate);
-
-      if (insertIndex !== undefined && insertIndex < targetActions.length) {
-        const beforeId = targetActions[Math.max(0, insertIndex)].id;
-        const beforeIndex = current.findIndex((action) => action.id === beforeId);
-        return [...current.slice(0, beforeIndex), newAction, ...current.slice(beforeIndex)];
-      }
-
-      const lastTargetIndex = current.reduce(
-        (last, action, index) => action.date === targetDate ? index : last,
-        -1,
-      );
-      if (lastTargetIndex < 0) return [...current, newAction];
-      return [
-        ...current.slice(0, lastTargetIndex + 1),
-        newAction,
-        ...current.slice(lastTargetIndex + 1),
-      ];
-    });
+  async function addAction(target: string, title: string, insertIndex?: number) {
+    const date = target === "someday" ? null : target;
+    const targetActions = actionsFor(date);
+    const beforeId = insertIndex === undefined ? undefined : targetActions[insertIndex]?.id;
     setComposerTarget(null);
+    try {
+      const newAction = await api.createAction({ title, date, beforeId });
+      setActions((current) => insertAction(current, newAction, beforeId));
+      setServerError(null);
+    } catch (error) {
+      setServerError(errorMessage(error));
+    }
   }
 
-  function updateAction(id: string, patch: Partial<CalendarAction>) {
-    setActions((current) => current.map((action) => action.id === id ? { ...action, ...patch } : action));
+  function updateAction(id: string, patch: UpdateActionInput) {
+    setActions((current) => current.map((action) => action.id === id
+      ? {
+          ...action,
+          ...patch,
+          ...(Object.hasOwn(patch, "completed")
+            ? { completedAt: patch.completed ? new Date().toISOString() : null }
+            : {}),
+        }
+      : action));
+
+    pendingPatches.current.set(id, { ...pendingPatches.current.get(id), ...patch });
+    const existingTimer = patchTimers.current.get(id);
+    if (existingTimer) window.clearTimeout(existingTimer);
+    const timer = window.setTimeout(async () => {
+      const pending = pendingPatches.current.get(id);
+      pendingPatches.current.delete(id);
+      patchTimers.current.delete(id);
+      if (!pending) return;
+      try {
+        const saved = await api.updateAction(id, pending);
+        setActions((current) => current.map((action) => action.id === id
+          ? { ...action, completedAt: saved.completedAt }
+          : action));
+        setServerError(null);
+      } catch (error) {
+        setServerError(errorMessage(error));
+        void reloadApplication();
+      }
+    }, 250);
+    patchTimers.current.set(id, timer);
   }
 
-  function moveAction(draggedId: string, targetDate: string | null, beforeId?: string) {
+  function discardPendingPatch(id: string) {
+    const timer = patchTimers.current.get(id);
+    if (timer) window.clearTimeout(timer);
+    patchTimers.current.delete(id);
+    pendingPatches.current.delete(id);
+  }
+
+  function moveActionLocally(draggedId: string, targetDate: string | null, beforeId?: string) {
     setActions((current) => {
       const moving = current.find((action) => action.id === draggedId);
       if (!moving) return current;
@@ -608,6 +528,17 @@ export default function App() {
         ...remaining.slice(lastTargetIndex + 1),
       ];
     });
+  }
+
+  async function reloadApplication() {
+    try {
+      const application = await api.loadApplication();
+      setSession(application.session);
+      setActions(application.actions);
+      setServerError(null);
+    } catch (error) {
+      setServerError(errorMessage(error));
+    }
   }
 
   function navigate(direction: -1 | 1) {
@@ -688,9 +619,19 @@ export default function App() {
   }
 
   function completeDrop(droppedId: string, target: string, beforeId?: string) {
-    moveAction(droppedId, target === "someday" ? null : target, beforeId);
+    const date = target === "someday" ? null : target;
+    moveActionLocally(droppedId, date, beforeId);
     setDraggedId(null);
     setDropTarget(null);
+    void api.moveAction(droppedId, { date, beforeId })
+      .then((savedActions) => {
+        setActions(savedActions);
+        setServerError(null);
+      })
+      .catch((error: unknown) => {
+        setServerError(errorMessage(error));
+        void reloadApplication();
+      });
   }
 
   function actionProps(
@@ -931,6 +872,21 @@ export default function App() {
     );
   }
 
+  if (loading) {
+    return <main className="app-shell"><div className="application-state">Loading…</div></main>;
+  }
+
+  if (!session) {
+    return (
+      <main className="app-shell">
+        <div className="application-state">
+          <strong>Organization could not start.</strong>
+          <button type="button" onClick={() => void reloadApplication()}>Try again</button>
+        </div>
+      </main>
+    );
+  }
+
   return (
     <main className="app-shell">
       <header className="topbar" id="top">
@@ -940,12 +896,15 @@ export default function App() {
           <button type="button" className={tab === "activity" ? "is-active" : ""} onClick={() => setTab("activity")}>Activity</button>
         </nav>
         <a className="brand" href="#top" aria-label="Organization home">organization</a>
-        <AccountControl
-          signedIn={signedIn}
-          onSignIn={() => setSignedIn(true)}
-          onSignOut={() => setSignedIn(false)}
-        />
+        <AccountControl session={session} />
       </header>
+
+      {serverError && (
+        <div className="server-error" role="status">
+          <span>{serverError}</span>
+          <button type="button" onClick={() => setServerError(null)} aria-label="Dismiss">×</button>
+        </div>
+      )}
 
       {tab === "actions" ? (
         <>
@@ -976,7 +935,7 @@ export default function App() {
       ) : tab === "journal" ? (
         <section className="journal-placeholder">
           <h1>Journal</h1>
-          <p>The Journal is outside the current prototype scope.</p>
+          <p>Not available yet.</p>
           <button type="button" onClick={() => setTab("actions")}>Return to actions</button>
         </section>
       ) : (
@@ -989,11 +948,43 @@ export default function App() {
           onClose={() => setSelectedId(null)}
           onChange={(patch) => updateAction(selectedAction.id, patch)}
           onDelete={() => {
+            discardPendingPatch(selectedAction.id);
             setActions((current) => current.filter((action) => action.id !== selectedAction.id));
             setSelectedId(null);
+            void api.deleteAction(selectedAction.id).catch((error: unknown) => {
+              setServerError(errorMessage(error));
+              void reloadApplication();
+            });
           }}
         />
       )}
     </main>
   );
+}
+
+function insertAction(
+  actions: CalendarAction[],
+  action: CalendarAction,
+  beforeId?: string,
+) {
+  if (beforeId) {
+    const beforeIndex = actions.findIndex((candidate) => candidate.id === beforeId);
+    if (beforeIndex >= 0) {
+      return [...actions.slice(0, beforeIndex), action, ...actions.slice(beforeIndex)];
+    }
+  }
+  const lastTargetIndex = actions.reduce(
+    (last, candidate, index) => candidate.date === action.date ? index : last,
+    -1,
+  );
+  if (lastTargetIndex < 0) return [...actions, action];
+  return [
+    ...actions.slice(0, lastTargetIndex + 1),
+    action,
+    ...actions.slice(lastTargetIndex + 1),
+  ];
+}
+
+function errorMessage(error: unknown) {
+  return error instanceof Error ? error.message : "Organization could not save that change.";
 }

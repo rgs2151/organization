@@ -57,6 +57,51 @@ textarea:focus-visible {
   padding: 0 24px 48px;
 }
 
+.application-state {
+  display: grid;
+  min-height: 70vh;
+  place-content: center;
+  justify-items: center;
+  gap: 16px;
+  color: #6f6f69;
+  font-size: 14px;
+}
+
+.application-state strong {
+  color: var(--ink);
+  font-size: 18px;
+}
+
+.application-state button {
+  border: 1px solid #d8d8d2;
+  border-radius: 999px;
+  padding: 9px 15px;
+  background: var(--surface);
+  font-weight: 720;
+}
+
+.server-error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin: 10px 0 0;
+  border: 1px solid #e9b7b7;
+  border-radius: 9px;
+  padding: 9px 12px;
+  background: #fff1f1;
+  color: #7b3131;
+  font-size: 12px;
+}
+
+.server-error button {
+  border: 0;
+  padding: 0 3px;
+  background: transparent;
+  color: inherit;
+  font-size: 17px;
+}
+
 .topbar {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);

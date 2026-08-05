@@ -1,6 +1,6 @@
-# organization prototype
+# organization product direction
 
-An interactive product prototype for a calm, self-hosted system that gets responsibilities out of the user's head and into a trustworthy visual plan.
+A calm, self-hosted system that gets responsibilities out of the user's head and into a trustworthy visual plan.
 
 ## Product thesis
 
@@ -26,9 +26,9 @@ This is an original product built from those interaction principles. It is not i
 - **Activity:** a year-level record of completed actions.
 - **Journal:** the future reflection surface; intentionally outside this prototype's functional scope.
 
-## Prototype scope
+## Current Actions foundation
 
-The prototype validates the Actions workflow:
+The development app implements the Actions workflow:
 
 - week, month, and year views;
 - previous, next, and today navigation;
@@ -40,16 +40,17 @@ The prototype validates the Actions workflow:
 - a deliberately small Action Page;
 - a GitHub-inspired yearly activity heatmap;
 - responsive layouts for narrower screens;
+- durable, owner-scoped server persistence;
 - a visible but intentionally quiet Journal placeholder.
 
-## Interaction rules from prototype review
+## Established interaction rules
 
 - The global toolbar contains product tabs at the left, the `organization` name in the center, and the current user's account control at the right.
 - Calendar scale, Today, and period navigation live beside the current period because they affect the dated calendar, not the persistent `Someday` inbox.
 - Product navigation is `Actions`, `Journal`, and `Activity`. Activity is its own expandable surface, never a footer repeated below calendar views.
 - The interface does not use motivational slogans or explanatory filler copy.
 - In the week view, double-clicking a day's open space creates an action directly in that day. There is no persistent `+ Add action` link.
-- `Someday` is a persistent heading above a subtle, full-width inbox, leaving open space for direct creation and drop targets. Its `· +` control creates an undated action without removing the double-click shortcut.
+- `Someday` is a persistent heading above a subtle, full-width inbox, leaving open space for direct creation and drop targets. Its heading control creates an undated action without removing the double-click shortcut.
 - Week columns grow with their actions rather than using a fixed viewport height. Scheduled actions have one consistent two-line height and truncate longer titles until their Action Page is opened.
 - Dragging an action draws a stable animated insertion marker at its exact destination without reflowing the list under the pointer.
 - Actions do not reveal a hover handle or shift their text. The entire action remains directly draggable without hover chrome.
@@ -64,30 +65,19 @@ The prototype validates the Actions workflow:
 - Plain CSS rather than a component framework or styling system.
 - Browser-native drag-and-drop rather than a drag-and-drop package.
 - No calendar package. Calendar math and layouts are small enough to own.
-- No database, authentication, synchronization, or browser persistence yet. Prototype data resets on refresh.
-- The Rudra account menu and sign-in/sign-out states validate placement and interaction only. They are not an authentication boundary; real identity will come from Authentik/OIDC with server-side session enforcement.
-- The production data model and Notion migration will be designed only after the interaction model is approved.
-- A minimal multi-stage Docker image serves the compiled static prototype.
+- A small Node HTTP API rather than a server framework.
+- SQLite in WAL mode with strict tables, foreign keys, ordered SQL migrations, and owner-scoped queries.
+- Server-resolved identity. Local development uses an explicit development adapter; production will use verified Authentik session data.
+- No container or server-infrastructure coupling during application development.
 
 ## Explicitly deferred
 
 - Authentik/OIDC integration;
-- server persistence and multi-user ownership;
 - Notion import and migration tooling;
 - recurring actions, reminders, notifications, and time-of-day scheduling;
 - collaboration and action assignment;
 - calendar-provider synchronization;
-- the Journal data model and editor.
+- the Journal data model and editor;
+- Authentik session integration and production deployment packaging.
 
-## Run locally
-
-```bash
-npm install
-npm run dev
-```
-
-Or run the production-style container:
-
-```bash
-docker compose up --build
-```
+Local development instructions live in the repository [README](../README.md).
