@@ -320,7 +320,6 @@ function ActionComposer({
 
   return (
     <form className="action-composer" onSubmit={submit}>
-      <span className="composer-mark" aria-hidden="true">+</span>
       <input
         autoFocus
         value={title}
