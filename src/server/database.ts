@@ -21,6 +21,7 @@ export function openDatabase(databasePath: string) {
   `);
 
   applyMigrations(database);
+  database.exec("PRAGMA optimize;");
   return database;
 }
 

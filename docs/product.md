@@ -38,6 +38,7 @@ The development app implements the Actions workflow:
 - drag-and-drop scheduling across days and between `someday` and the calendar;
 - quick action creation;
 - a deliberately small Action Page;
+- a compact structured-note editor shared with the future Journal surface;
 - a GitHub-inspired yearly activity heatmap;
 - responsive layouts for narrower screens;
 - durable, owner-scoped server persistence;
@@ -55,6 +56,7 @@ The development app implements the Actions workflow:
 - Dragging an action draws a stable animated insertion marker at its exact destination without reflowing the list under the pointer.
 - Actions do not reveal a hover handle or shift their text. The entire action remains directly draggable without hover chrome.
 - New-action composers use the same inline input and icon-submit treatment across Someday, week, and month contexts, with size adjustments only for compact calendar cells.
+- The Action Page reserves most of its area for writing. Metadata and formatting controls remain compact and directly accessible.
 - The month view always shows every action. A calendar week grows to fit the busiest day in that row; actions are never collapsed behind a `+ more` counter.
 - The completion control remains on the right edge of an action and completion strikes through the title.
 - `Someday` remains the undated staging area and accepts actions dragged out of the calendar.
@@ -69,6 +71,7 @@ The development app implements the Actions workflow:
 - SQLite in WAL mode with strict tables, foreign keys, ordered SQL migrations, and owner-scoped queries.
 - Server-resolved identity. Local development uses an explicit development adapter; production will use verified Authentik session data.
 - No container or server-infrastructure coupling during application development.
+- Tiptap is used as a headless, on-demand editor engine. Organization owns its appearance, persistence, uploads, and interaction surface.
 
 ## Explicitly deferred
 

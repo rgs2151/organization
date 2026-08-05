@@ -6,6 +6,7 @@ import {
   type MoveActionInput,
   type OrganizationAction,
   type OrganizationUser,
+  type RichTextDocument,
   type UpdateActionInput,
 } from "../shared/contracts.js";
 import { DEVELOPMENT_ACTIONS } from "./development-seed.js";
@@ -14,7 +15,7 @@ type ActionRow = {
   id: string;
   title: string;
   scheduled_for: string | null;
-  notes: string;
+  note_document: string;
   completed: number;
   completed_at: string | null;
   color: string;
@@ -68,7 +69,7 @@ export class ActionRepository {
 
   list(ownerId: string): OrganizationAction[] {
     const rows = this.database.prepare(`
-      SELECT id, title, scheduled_for, notes, completed, completed_at, color
+      SELECT id, title, scheduled_for, note_document, completed, completed_at, color
       FROM actions
       WHERE owner_id = ?
       ORDER BY scheduled_for IS NOT NULL, scheduled_for, position, created_at
@@ -110,9 +111,9 @@ export class ActionRepository {
       assignments.push("title = ?");
       values.push(validateTitle(input.title ?? ""));
     }
-    if (Object.hasOwn(input, "notes")) {
-      assignments.push("notes = ?");
-      values.push(String(input.notes ?? "").slice(0, 50_000));
+    if (Object.hasOwn(input, "note")) {
+      assignments.push("note_document = ?");
+      values.push(validateNote(input.note));
     }
     if (Object.hasOwn(input, "color")) {
       if (!ACTION_COLORS.includes(input.color!)) throw new InputError("Unknown action color.");
@@ -166,7 +167,7 @@ export class ActionRepository {
 
   private getRequired(ownerId: string, id: string) {
     const row = this.database.prepare(`
-      SELECT id, title, scheduled_for, notes, completed, completed_at, color
+      SELECT id, title, scheduled_for, note_document, completed, completed_at, color
       FROM actions WHERE owner_id = ? AND id = ?
     `).get(ownerId, id) as unknown as ActionRow | undefined;
     if (!row) throw new NotFoundError("Action not found.");
@@ -208,7 +209,7 @@ function toAction(row: ActionRow): OrganizationAction {
     id: row.id,
     title: row.title,
     date: row.scheduled_for,
-    notes: row.notes,
+    note: parseNote(row.note_document),
     completed: Boolean(row.completed),
     completedAt: row.completed_at,
     color: row.color as OrganizationAction["color"],
@@ -232,6 +233,27 @@ function validateDate(value: string | null) {
     throw new InputError("Dates must use YYYY-MM-DD format.");
   }
   return value;
+}
+
+function validateNote(value: RichTextDocument | undefined) {
+  if (!value || value.type !== "doc" || (value.content && !Array.isArray(value.content))) {
+    throw new InputError("The action note must be a valid editor document.");
+  }
+  const serialized = JSON.stringify(value);
+  if (serialized.length > 1_000_000) {
+    throw new InputError("Action notes cannot exceed 1 MB.");
+  }
+  return serialized;
+}
+
+function parseNote(serialized: string): RichTextDocument {
+  try {
+    const value = JSON.parse(serialized) as RichTextDocument;
+    if (value.type === "doc") return value;
+  } catch {
+    // The migration and write path guarantee JSON; this fallback keeps one damaged row readable.
+  }
+  return { type: "doc", content: [{ type: "paragraph" }] };
 }
 
 export class InputError extends Error {}

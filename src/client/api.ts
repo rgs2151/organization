@@ -1,5 +1,6 @@
 import type {
   CreateActionInput,
+  ActionAttachment,
   MoveActionInput,
   OrganizationAction,
   OrganizationSession,
@@ -53,4 +54,18 @@ export async function moveAction(id: string, input: MoveActionInput) {
 
 export async function deleteAction(id: string) {
   await request<void>(`/api/actions/${encodeURIComponent(id)}`, { method: "DELETE" });
+}
+
+export async function uploadActionImage(actionId: string, file: File) {
+  return (await request<{ attachment: ActionAttachment }>(
+    `/api/actions/${encodeURIComponent(actionId)}/attachments`,
+    {
+      method: "POST",
+      headers: {
+        "content-type": file.type,
+        "x-file-name": encodeURIComponent(file.name),
+      },
+      body: file,
+    },
+  )).attachment;
 }

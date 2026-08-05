@@ -8,9 +8,16 @@ function resolveDatabasePath() {
   return path.resolve(repositoryRoot, configured);
 }
 
+function resolveUploadPath() {
+  const configured = process.env.ORGANIZATION_UPLOAD_PATH;
+  if (!configured) return path.join(repositoryRoot, "var", "uploads");
+  return path.resolve(repositoryRoot, configured);
+}
+
 export const config = {
   port: Number(process.env.ORGANIZATION_API_PORT ?? 3001),
   databasePath: resolveDatabasePath(),
+  uploadDirectory: resolveUploadPath(),
   developmentUser: {
     id: process.env.ORGANIZATION_DEV_USER_ID ?? "dev-rudra",
     displayName: process.env.ORGANIZATION_DEV_USER_NAME ?? "Rudra",

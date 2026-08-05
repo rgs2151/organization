@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { ActionRepository } from "./action-repository.js";
+import { AttachmentRepository } from "./attachment-repository.js";
 import { openDatabase } from "./database.js";
 
 test("actions remain owner-scoped and support the complete persistence lifecycle", (context) => {
@@ -15,6 +16,7 @@ test("actions remain owner-scoped and support the complete persistence lifecycle
   });
 
   const repository = new ActionRepository(database);
+  const attachments = new AttachmentRepository(database);
   const owner = {
     id: "test-owner",
     displayName: "Test Owner",
@@ -32,13 +34,36 @@ test("actions remain owner-scoped and support the complete persistence lifecycle
   assert.equal(repository.list(owner.id).findIndex((action) => action.id === created.id), 0);
 
   const updated = repository.update(owner.id, created.id, {
-    notes: "Stored in SQLite",
+    note: {
+      type: "doc",
+      content: [{ type: "paragraph", content: [{ type: "text", text: "Stored in SQLite" }] }],
+    },
     completed: true,
     color: "mint",
   });
-  assert.equal(updated.notes, "Stored in SQLite");
+  assert.equal(updated.note.content?.[0]?.content?.[0]?.text, "Stored in SQLite");
   assert.equal(updated.completed, true);
   assert.ok(updated.completedAt);
+
+  attachments.create(owner.id, created.id, {
+    id: "attachment-kept",
+    storageKey: "kept.png",
+    filename: "kept.png",
+    contentType: "image/png",
+    byteSize: 128,
+  });
+  attachments.create(owner.id, created.id, {
+    id: "attachment-removed",
+    storageKey: "removed.png",
+    filename: "removed.png",
+    contentType: "image/png",
+    byteSize: 128,
+  });
+  assert.deepEqual(
+    attachments.deleteUnreferenced(owner.id, created.id, new Set(["attachment-kept"])),
+    ["removed.png"],
+  );
+  assert.equal(attachments.get(owner.id, "attachment-kept").filename, "kept.png");
 
   const moved = repository.move(owner.id, created.id, {
     date: "2026-08-05",

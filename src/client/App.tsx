@@ -1,5 +1,7 @@
 import {
   Fragment,
+  lazy,
+  Suspense,
   useEffect,
   useMemo,
   useRef,
@@ -15,6 +17,8 @@ import {
   type OrganizationSession,
   type UpdateActionInput,
 } from "../shared/contracts";
+
+const RichNoteEditor = lazy(() => import("./RichNoteEditor"));
 
 type ViewMode = "week" | "month" | "year";
 type AppTab = "actions" | "journal" | "activity";
@@ -264,32 +268,15 @@ function ActionPage({
         onMouseDown={(event) => event.stopPropagation()}
       >
         <header className="action-page-header">
-          <div>
-            <span className="action-page-kicker">Action page</span>
-            <span className="action-page-date">{prettyDate(action.date)}</span>
-          </div>
-          <button className="quiet-icon" type="button" onClick={onClose} aria-label="Close action page">×</button>
-        </header>
-
-        <input
-          id="action-page-title"
-          className="action-page-title"
-          value={action.title}
-          onChange={(event) => onChange({ title: event.target.value })}
-          aria-label="Action title"
-        />
-
-        <div className="action-page-fields">
-          <label>
-            <span>Date</span>
-            <input
-              type="date"
-              value={action.date ?? ""}
-              onChange={(event) => onChange({ date: event.target.value || null })}
-            />
-          </label>
-          <div className="color-field">
-            <span>Color</span>
+          <div className="action-page-meta">
+            <label className="action-date-control">
+              <span>Date</span>
+              <input
+                type="date"
+                value={action.date ?? ""}
+                onChange={(event) => onChange({ date: event.target.value || null })}
+              />
+            </label>
             <div className="color-options" aria-label="Action color">
               {(Object.keys(ACTION_COLOR_VALUES) as ActionColor[]).map((color) => (
                 <button
@@ -304,16 +291,24 @@ function ActionPage({
               ))}
             </div>
           </div>
-        </div>
+          <button className="quiet-icon" type="button" onClick={onClose} aria-label="Close action page">×</button>
+        </header>
 
-        <label className="notes-field">
-          <span>Notes</span>
-          <textarea
-            value={action.notes}
-            onChange={(event) => onChange({ notes: event.target.value })}
-            placeholder="Add context without turning this into a document…"
+        <input
+          id="action-page-title"
+          className="action-page-title"
+          value={action.title}
+          onChange={(event) => onChange({ title: event.target.value })}
+          aria-label="Action title"
+        />
+
+        <Suspense fallback={<div className="rich-note rich-note-loading" aria-label="Loading notes" />}>
+          <RichNoteEditor
+            actionId={action.id}
+            note={action.note}
+            onChange={(note) => onChange({ note })}
           />
-        </label>
+        </Suspense>
 
         <footer className="action-page-footer">
           <button className="delete-action" type="button" onClick={onDelete}>Delete</button>

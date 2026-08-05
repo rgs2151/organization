@@ -16,13 +16,18 @@
     "preview": "vite preview --host 127.0.0.1 --port 3000"
   },
   "dependencies": {
+    "@tiptap/extension-image": "^3.29.2",
+    "@tiptap/extension-list": "^3.29.2",
+    "@tiptap/extension-placeholder": "^3.29.2",
+    "@tiptap/react": "^3.29.2",
+    "@tiptap/starter-kit": "^3.29.2",
     "react": "19.2.6",
     "react-dom": "19.2.6"
   },
   "devDependencies": {
+    "@types/node": "^24.10.0",
     "@types/react": "19.2.14",
     "@types/react-dom": "19.2.3",
-    "@types/node": "^24.10.0",
     "@vitejs/plugin-react": "^6.0.5",
     "tsx": "^4.21.0",
     "typescript": "5.9.3",

@@ -9,6 +9,7 @@ A self-hosted personal organization app for getting responsibilities out of your
 - Capture undated work in the persistent **Someday** inbox.
 - Plan and reorganize actions across week, month, and year views.
 - Open an Action Page for title, date, color, notes, and completion.
+- Write structured notes with headings, emphasis, lists, interactive checklists, quotes, code, and images.
 - Drag actions within a day or between dates without losing their order.
 - Record real completion timestamps for the Activity view.
 - Keep every record scoped to a server-resolved owner.
@@ -23,13 +24,17 @@ flowchart LR
     API --> Identity["Development identity adapter"]
     API --> Repository["Owner-scoped repository"]
     Repository --> SQLite[("SQLite + WAL\nvar/organization.sqlite")]
+    API --> Media[("Owned image files\nvar/uploads")]
+    MediaMeta["Attachment ownership metadata"] --> SQLite
     Migrations["Versioned SQL migrations"] --> SQLite
     Authentik["Authentik session adapter\nproduction phase"] -. replaces .-> Identity
 ```
 
 The browser never chooses the data owner. During local development, the server resolves one explicitly configured development identity. Production startup is refused until that adapter is replaced with verified Authentik session data.
 
-SQLite is embedded in the application process and runs in WAL mode with foreign keys, a busy timeout, strict tables, and versioned migrations. The database file is runtime state and is not committed.
+SQLite is embedded in the application process and runs in WAL mode with foreign keys, a busy timeout, strict tables, and versioned migrations. Image bytes live outside the database while ownership metadata stays relational. All runtime state is ignored by Git.
+
+The writing surface is documented in [docs/editor.md](./docs/editor.md).
 
 ## Run locally
 
