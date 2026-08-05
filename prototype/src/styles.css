@@ -54,14 +54,14 @@ textarea:focus-visible {
   width: min(100%, 1800px);
   min-height: 100vh;
   margin: 0 auto;
-  padding: 0 32px 72px;
+  padding: 0 24px 48px;
 }
 
 .topbar {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  min-height: 72px;
+  gap: 14px;
+  min-height: 58px;
   border-bottom: 1px solid rgba(21, 21, 21, 0.12);
 }
 
@@ -76,49 +76,38 @@ textarea:focus-visible {
   text-decoration: none;
 }
 
-.brand span {
-  color: var(--muted);
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
 .primary-tabs {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 3px;
+  padding: 4px;
+  border: 1px solid #d8d8d2;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.7);
 }
 
 .primary-tabs button {
   border: 0;
   border-radius: 999px;
-  padding: 9px 14px;
+  min-width: 68px;
+  padding: 8px 12px;
   background: transparent;
   color: #777772;
-  font-size: 14px;
-  font-weight: 650;
+  font-size: 12px;
+  font-weight: 720;
 }
 
 .primary-tabs button.is-active {
-  background: #1d1d1d;
-  color: white;
+  background: var(--accent-soft);
+  color: #30304d;
+  box-shadow: 0 1px 4px rgba(62, 59, 117, 0.13);
 }
 
-.primary-tabs button span {
-  margin-left: 4px;
-  font-size: 9px;
-  letter-spacing: 0.08em;
-  opacity: 0.64;
-  text-transform: uppercase;
-}
-
-.calendar-heading {
+.period-heading {
   display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 32px;
-  padding: 52px 0 26px;
+  align-items: center;
+  min-height: 62px;
+  padding: 15px 2px 13px;
 }
 
 .eyebrow,
@@ -132,19 +121,20 @@ textarea:focus-visible {
   text-transform: uppercase;
 }
 
-.calendar-heading h1,
+.period-heading h1,
 .journal-placeholder h1 {
   margin: 0;
-  font-size: clamp(34px, 4.3vw, 62px);
-  font-weight: 810;
-  letter-spacing: -0.055em;
-  line-height: 0.98;
+  font-size: clamp(24px, 2.4vw, 34px);
+  font-weight: 790;
+  letter-spacing: -0.045em;
+  line-height: 1;
 }
 
 .calendar-controls {
   display: flex;
   align-items: center;
   gap: 10px;
+  margin-left: auto;
 }
 
 .view-switch {
@@ -211,17 +201,6 @@ textarea:focus-visible {
   transform: translateY(-1px);
 }
 
-.interaction-note {
-  margin: -4px 0 25px;
-  color: #96968f;
-  font-size: 12px;
-}
-
-.interaction-note span {
-  color: #55554f;
-  font-weight: 700;
-}
-
 .week-scroll {
   overflow-x: auto;
   padding-bottom: 8px;
@@ -237,7 +216,6 @@ textarea:focus-visible {
 
 .day-column {
   display: flex;
-  min-height: 500px;
   flex-direction: column;
   padding-top: 1px;
 }
@@ -272,7 +250,15 @@ textarea:focus-visible {
 }
 
 .day-actions {
-  min-height: 180px;
+  min-height: calc(var(--week-action-rows) * 43px + 30px);
+  background: repeating-linear-gradient(
+    to bottom,
+    transparent 0,
+    transparent 42px,
+    rgba(222, 222, 216, 0.72) 42px,
+    rgba(222, 222, 216, 0.72) 43px
+  );
+  cursor: text;
 }
 
 .action-item {
@@ -380,22 +366,6 @@ textarea:focus-visible {
   opacity: 0.68;
 }
 
-.day-add {
-  margin-top: 7px;
-  border: 0;
-  padding: 8px 5px;
-  background: transparent;
-  color: transparent;
-  font-size: 11px;
-  text-align: left;
-  transition: color 150ms ease;
-}
-
-.day-column:hover .day-add,
-.day-add:focus-visible {
-  color: #92928b;
-}
-
 .action-composer {
   display: flex;
   align-items: center;
@@ -429,18 +399,18 @@ textarea:focus-visible {
 }
 
 .someday-section {
-  margin-top: 28px;
+  margin-top: 15px;
   border-top: 2px solid var(--strong-line);
-  padding: 24px 0 12px;
+  padding: 13px 0 8px;
+  cursor: text;
 }
 
 .someday-heading,
 .activity-heading {
   display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 24px;
-  margin-bottom: 20px;
+  align-items: center;
+  gap: 18px;
+  margin-bottom: 10px;
 }
 
 .someday-heading h2,
@@ -450,32 +420,19 @@ textarea:focus-visible {
   letter-spacing: -0.04em;
 }
 
-.someday-heading p,
-.activity-heading p {
-  margin: 0;
-  color: #888882;
-  font-size: 12px;
-}
-
 .someday-grid {
   display: grid;
+  min-height: 58px;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   column-gap: 30px;
-}
-
-.someday-add {
-  min-height: 43px;
-  border-bottom: 1px solid var(--line);
-}
-
-.someday-add > button {
-  width: 100%;
-  border: 0;
-  padding: 12px 5px;
-  background: transparent;
-  color: #999992;
-  font-size: 12px;
-  text-align: left;
+  padding-bottom: 15px;
+  background: repeating-linear-gradient(
+    to bottom,
+    transparent 0,
+    transparent 42px,
+    rgba(222, 222, 216, 0.72) 42px,
+    rgba(222, 222, 216, 0.72) 43px
+  );
 }
 
 .month-view {
@@ -505,11 +462,12 @@ textarea:focus-visible {
 .month-grid {
   display: grid;
   grid-template-columns: repeat(7, minmax(0, 1fr));
+  grid-auto-rows: minmax(160px, auto);
 }
 
 .month-day {
   min-width: 0;
-  min-height: 142px;
+  min-height: 160px;
   border-right: 1px solid #deded8;
   border-bottom: 1px solid #deded8;
   padding: 7px;
@@ -550,21 +508,6 @@ textarea:focus-visible {
 .month-day.is-today > header span {
   background: #ee655d;
   color: white;
-}
-
-.month-day > header button {
-  width: 22px;
-  height: 22px;
-  border: 0;
-  border-radius: 50%;
-  background: transparent;
-  color: transparent;
-}
-
-.month-day:hover > header button,
-.month-day > header button:focus-visible {
-  background: #ecece7;
-  color: #55554f;
 }
 
 .month-actions {
@@ -608,15 +551,6 @@ textarea:focus-visible {
 
 .action-item.is-compact .action-drag {
   display: none;
-}
-
-.more-actions {
-  border: 0;
-  padding: 2px 5px;
-  background: transparent;
-  color: #777771;
-  font-size: 10px;
-  text-align: left;
 }
 
 .month-day .action-composer {
@@ -716,9 +650,15 @@ textarea:focus-visible {
 }
 
 .activity-section {
-  margin-top: 70px;
-  border-top: 1px solid #cacac4;
-  padding-top: 35px;
+  margin-top: 0;
+  padding-top: 28px;
+}
+
+.activity-heading h1 {
+  margin: 0;
+  font-size: clamp(24px, 2.4vw, 34px);
+  font-weight: 790;
+  letter-spacing: -0.045em;
 }
 
 .activity-card {
@@ -1028,7 +968,7 @@ textarea:focus-visible {
 
 .journal-placeholder {
   width: min(100%, 800px);
-  margin: 17vh auto 0;
+  margin: 12vh auto 0;
   text-align: center;
 }
 
@@ -1071,13 +1011,12 @@ textarea:focus-visible {
     padding-inline: 20px;
   }
 
-  .calendar-heading {
-    align-items: flex-start;
-    flex-direction: column;
+  .topbar {
+    flex-wrap: wrap;
+    padding: 11px 0;
   }
 
   .calendar-controls {
-    width: 100%;
     flex-wrap: wrap;
   }
 
@@ -1109,35 +1048,33 @@ textarea:focus-visible {
   }
 
   .topbar {
-    align-items: flex-start;
-    flex-direction: column;
+    align-items: center;
     gap: 12px;
     padding: 18px 0;
   }
 
   .primary-tabs {
-    width: 100%;
+    order: 2;
+    width: calc(100% - 2px);
   }
 
   .primary-tabs button {
     flex: 1;
   }
 
-  .calendar-heading {
-    padding-top: 38px;
-  }
-
   .view-switch {
+    order: 1;
     width: 100%;
-    order: -1;
   }
 
   .view-switch button {
     flex: 1;
   }
 
-  .interaction-note {
-    line-height: 1.6;
+  .calendar-controls {
+    width: 100%;
+    order: 3;
+    margin-left: 0;
   }
 
   .year-view,

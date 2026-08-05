@@ -1,4 +1,5 @@
 import {
+  Fragment,
   useMemo,
   useState,
   type CSSProperties,
@@ -7,7 +8,7 @@ import {
 } from "react";
 
 type ViewMode = "week" | "month" | "year";
-type AppTab = "actions" | "journal";
+type AppTab = "actions" | "journal" | "activity";
 type ActionColor = "plain" | "sun" | "mint" | "lilac" | "rose";
 
 type CalendarAction = {
@@ -247,6 +248,7 @@ function ActionItem({
         if (draggedId && draggedId !== action.id) onDropBefore(draggedId);
       }}
       style={style}
+      onDoubleClick={(event) => event.stopPropagation()}
     >
       <button className="action-open" type="button" onClick={onOpen}>
         <span className="action-drag" aria-hidden="true">⠿</span>
@@ -425,11 +427,7 @@ function ActivityHeatmap({
   return (
     <section className="activity-section" aria-labelledby="activity-title">
       <div className="activity-heading">
-        <div>
-          <span className="section-kicker">Activity</span>
-          <h2 id="activity-title">{total} actions completed in {year}</h2>
-        </div>
-        <p>Consistency becomes visible here.</p>
+        <h1 id="activity-title">{total} actions completed in {year}</h1>
       </div>
 
       <div className="activity-card">
@@ -474,7 +472,7 @@ export default function App() {
   const [focusDate, setFocusDate] = useState(new Date(2026, 7, 5));
   const [actions, setActions] = useState(INITIAL_ACTIONS);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [composerTarget, setComposerTarget] = useState<string | null>(null);
+  const [composerTarget, setComposerTarget] = useState<{ target: string; index?: number } | null>(null);
   const [activityYear, setActivityYear] = useState(2026);
 
   const selectedAction = actions.find((action) => action.id === selectedId) ?? null;
@@ -483,7 +481,7 @@ export default function App() {
     return actions.filter((action) => action.date === date);
   }
 
-  function addAction(target: string, title: string) {
+  function addAction(target: string, title: string, insertIndex?: number) {
     const newAction: CalendarAction = {
       id: `action-${Date.now()}`,
       title,
@@ -492,7 +490,27 @@ export default function App() {
       completed: false,
       color: "plain",
     };
-    setActions((current) => [...current, newAction]);
+    setActions((current) => {
+      const targetDate = newAction.date;
+      const targetActions = current.filter((action) => action.date === targetDate);
+
+      if (insertIndex !== undefined && insertIndex < targetActions.length) {
+        const beforeId = targetActions[Math.max(0, insertIndex)].id;
+        const beforeIndex = current.findIndex((action) => action.id === beforeId);
+        return [...current.slice(0, beforeIndex), newAction, ...current.slice(beforeIndex)];
+      }
+
+      const lastTargetIndex = current.reduce(
+        (last, action, index) => action.date === targetDate ? index : last,
+        -1,
+      );
+      if (lastTargetIndex < 0) return [...current, newAction];
+      return [
+        ...current.slice(0, lastTargetIndex + 1),
+        newAction,
+        ...current.slice(lastTargetIndex + 1),
+      ];
+    });
     setComposerTarget(null);
   }
 
@@ -543,9 +561,9 @@ export default function App() {
     onDropBefore: (draggedId: string) => moveAction(draggedId, action.date, action.id),
   });
 
-  function renderComposer(target: string) {
-    return composerTarget === target ? (
-      <ActionComposer onAdd={(title) => addAction(target, title)} onCancel={() => setComposerTarget(null)} />
+  function renderComposer(target: string, index?: number) {
+    return composerTarget?.target === target && composerTarget.index === index ? (
+      <ActionComposer onAdd={(title) => addAction(target, title, index)} onCancel={() => setComposerTarget(null)} />
     ) : null;
   }
 
@@ -560,18 +578,17 @@ export default function App() {
           const id = event.dataTransfer.getData("text/action-id");
           if (id) moveAction(id, null);
         }}
+        onDoubleClick={(event) => {
+          if ((event.target as HTMLElement).closest(".action-item, .action-composer")) return;
+          setComposerTarget({ target: "someday", index: somedayActions.length });
+        }}
       >
         <div className="someday-heading">
-          <div><span className="section-kicker">Unscheduled</span><h2>Someday</h2></div>
-          <p>Capture now. Decide when later.</p>
+          <h2>Someday</h2>
         </div>
         <div className="someday-grid">
           {somedayActions.map((action) => <ActionItem key={action.id} {...actionProps(action)} />)}
-          <div className="someday-add">
-            {renderComposer("someday") ?? (
-              <button type="button" onClick={() => setComposerTarget("someday")}>+ Add an unscheduled action</button>
-            )}
-          </div>
+          {renderComposer("someday", somedayActions.length)}
         </div>
       </section>
     );
@@ -581,11 +598,16 @@ export default function App() {
     const start = startOfWeek(focusDate);
     const days = Array.from({ length: 7 }, (_, index) => addDays(start, index));
     const todayKey = toDateKey(new Date());
+    const maxActionCount = Math.max(1, ...days.map((day) => actionsFor(toDateKey(day)).length));
 
     return (
       <>
         <div className="week-scroll">
-          <section className="week-grid" aria-label="Week view">
+          <section
+            className="week-grid"
+            aria-label="Week view"
+            style={{ "--week-action-rows": maxActionCount } as CSSProperties}
+          >
             {days.map((day) => {
               const key = toDateKey(day);
               const dayActions = actionsFor(key);
@@ -604,13 +626,24 @@ export default function App() {
                     <strong>{day.getDate()} {MONTHS[day.getMonth()].slice(0, 3)}</strong>
                     <span>{WEEKDAYS[(day.getDay() + 6) % 7]}</span>
                   </header>
-                  <div className="day-actions">
-                    {dayActions.map((action) => <ActionItem key={action.id} {...actionProps(action)} />)}
-                    {renderComposer(key)}
+                  <div
+                    className="day-actions"
+                    onDoubleClick={(event) => {
+                      if ((event.target as HTMLElement).closest(".action-item, .action-composer")) return;
+                      const bounds = event.currentTarget.getBoundingClientRect();
+                      const clickedRow = Math.floor((event.clientY - bounds.top) / 43);
+                      const index = Math.max(0, Math.min(dayActions.length, clickedRow));
+                      setComposerTarget({ target: key, index });
+                    }}
+                  >
+                    {dayActions.map((action, index) => (
+                      <Fragment key={action.id}>
+                        {renderComposer(key, index)}
+                        <ActionItem {...actionProps(action)} />
+                      </Fragment>
+                    ))}
+                    {renderComposer(key, dayActions.length)}
                   </div>
-                  {composerTarget !== key && (
-                    <button className="day-add" type="button" onClick={() => setComposerTarget(key)}>+ Add action</button>
-                  )}
                 </article>
               );
             })}
@@ -637,7 +670,6 @@ export default function App() {
             {days.map((day) => {
               const key = toDateKey(day);
               const dayActions = actionsFor(key);
-              const visibleActions = dayActions.slice(0, 3);
               return (
                 <article
                   key={key}
@@ -648,15 +680,17 @@ export default function App() {
                     const id = event.dataTransfer.getData("text/action-id");
                     if (id) moveAction(id, key);
                   }}
+                  onDoubleClick={(event) => {
+                    if ((event.target as HTMLElement).closest(".action-item, .action-composer")) return;
+                    setComposerTarget({ target: key, index: dayActions.length });
+                  }}
                 >
                   <header>
                     <span>{day.getDate()}</span>
-                    <button type="button" aria-label={`Add action on ${prettyDate(key)}`} onClick={() => setComposerTarget(key)}>+</button>
                   </header>
                   <div className="month-actions">
-                    {visibleActions.map((action) => <ActionItem key={action.id} {...actionProps(action, true)} />)}
-                    {dayActions.length > 3 && <button className="more-actions" type="button">+{dayActions.length - 3} more</button>}
-                    {renderComposer(key)}
+                    {dayActions.map((action) => <ActionItem key={action.id} {...actionProps(action, true)} />)}
+                    {renderComposer(key, dayActions.length)}
                   </div>
                 </article>
               );
@@ -718,50 +752,47 @@ export default function App() {
 
   return (
     <main className="app-shell">
-      <header className="topbar">
-        <a className="brand" href="#top" aria-label="Organization home">organization<span>prototype</span></a>
+      <header className="topbar" id="top">
+        <a className="brand" href="#top" aria-label="Organization home">organization</a>
         <nav className="primary-tabs" aria-label="Product sections">
           <button type="button" className={tab === "actions" ? "is-active" : ""} onClick={() => setTab("actions")}>Actions</button>
-          <button type="button" className={tab === "journal" ? "is-active" : ""} onClick={() => setTab("journal")}>Journal <span>later</span></button>
+          <button type="button" className={tab === "journal" ? "is-active" : ""} onClick={() => setTab("journal")}>Journal</button>
+          <button type="button" className={tab === "activity" ? "is-active" : ""} onClick={() => setTab("activity")}>Activity</button>
         </nav>
+        {tab === "actions" && (
+          <div className="calendar-controls">
+            <div className="view-switch" aria-label="Calendar view">
+              {(["week", "month", "year"] as ViewMode[]).map((mode) => (
+                <button key={mode} type="button" className={view === mode ? "is-active" : ""} onClick={() => setView(mode)}>{mode}</button>
+              ))}
+            </div>
+            <button className="today-button" type="button" onClick={() => setFocusDate(new Date())}>Today</button>
+            <div className="period-nav">
+              <button type="button" onClick={() => navigate(-1)} aria-label={`Previous ${view}`}>←</button>
+              <button type="button" onClick={() => navigate(1)} aria-label={`Next ${view}`}>→</button>
+            </div>
+          </div>
+        )}
       </header>
 
       {tab === "actions" ? (
         <>
-          <section className="calendar-heading" id="top">
-            <div>
-              <span className="eyebrow">Make room to think</span>
-              <h1>{periodTitle(view, focusDate)}</h1>
-            </div>
-            <div className="calendar-controls">
-              <div className="view-switch" aria-label="Calendar view">
-                {(["week", "month", "year"] as ViewMode[]).map((mode) => (
-                  <button key={mode} type="button" className={view === mode ? "is-active" : ""} onClick={() => setView(mode)}>{mode}</button>
-                ))}
-              </div>
-              <button className="today-button" type="button" onClick={() => setFocusDate(new Date())}>Today</button>
-              <div className="period-nav">
-                <button type="button" onClick={() => navigate(-1)} aria-label={`Previous ${view}`}>←</button>
-                <button type="button" onClick={() => navigate(1)} aria-label={`Next ${view}`}>→</button>
-              </div>
-            </div>
+          <section className="period-heading">
+            <h1>{periodTitle(view, focusDate)}</h1>
           </section>
-
-          <p className="interaction-note"><span>Drag</span> to reorder or reschedule · <span>Click</span> an action for its page · <span>Check</span> it off on the right</p>
 
           {view === "week" && renderWeek()}
           {view === "month" && renderMonth()}
           {view === "year" && renderYear()}
-
-          <ActivityHeatmap actions={actions} year={activityYear} onYearChange={setActivityYear} />
         </>
-      ) : (
+      ) : tab === "journal" ? (
         <section className="journal-placeholder">
-          <span className="eyebrow">Journal</span>
-          <h1>A quieter place for reflection.</h1>
-          <p>The Journal is intentionally waiting until the Actions workflow feels right. It will share the same calm visual language without becoming another notes database.</p>
+          <h1>Journal</h1>
+          <p>The Journal is outside the current prototype scope.</p>
           <button type="button" onClick={() => setTab("actions")}>Return to actions</button>
         </section>
+      ) : (
+        <ActivityHeatmap actions={actions} year={activityYear} onYearChange={setActivityYear} />
       )}
 
       {selectedAction && (

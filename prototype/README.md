@@ -42,6 +42,17 @@ The prototype validates the Actions workflow:
 - responsive layouts for narrower screens;
 - a visible but intentionally quiet Journal placeholder.
 
+## Interaction rules from prototype review
+
+- The interface uses one compact toolbar. Product tabs, calendar scale, Today, and period navigation belong together.
+- Product navigation is `Actions`, `Journal`, and `Activity`. Activity is its own expandable surface, never a footer repeated below calendar views.
+- The interface does not use motivational slogans or explanatory filler copy.
+- In the week view, double-clicking a day's open space creates an action directly in that day. There is no persistent `+ Add action` link.
+- Week columns grow only as tall as the busiest day. `Someday` begins immediately after the week instead of being pushed below an artificial full-screen calendar.
+- The month view always shows every action. A calendar week grows to fit the busiest day in that row; actions are never collapsed behind a `+ more` counter.
+- The completion control remains on the right edge of an action and completion strikes through the title.
+- `Someday` remains the undated staging area and accepts actions dragged out of the calendar.
+
 ## Deliberate technical decisions
 
 - React and TypeScript, built with Vite.
