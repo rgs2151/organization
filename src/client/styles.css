@@ -1264,6 +1264,7 @@ textarea:focus-visible {
 }
 
 .rich-note-content {
+  --heading-disclosure-gutter: 20px;
   min-height: 100%;
   padding: 18px 20px 32px;
   color: #242431;
@@ -1295,15 +1296,16 @@ textarea:focus-visible {
 }
 
 .rich-note-content .collapsible-heading {
-  display: flex;
-  align-items: flex-start;
-  gap: 4px;
+  position: relative;
+  display: block;
 }
 
 .rich-note-content .heading-collapse-button {
-  width: 20px;
+  position: absolute;
+  top: 0.12em;
+  left: calc(-1 * var(--heading-disclosure-gutter));
+  width: var(--heading-disclosure-gutter);
   height: 22px;
-  flex: 0 0 20px;
   border: 0;
   border-radius: 5px;
   padding: 0;
@@ -1321,8 +1323,8 @@ textarea:focus-visible {
 }
 
 .rich-note-content .collapsible-heading-content {
+  display: block;
   min-width: 0;
-  flex: 1;
 }
 
 .rich-note-content .is-collapsed-section-content {
@@ -1658,6 +1660,7 @@ textarea:focus-visible {
   }
 
   .rich-note-content {
+    --heading-disclosure-gutter: 14px;
     padding: 15px 14px 26px;
   }
 }
