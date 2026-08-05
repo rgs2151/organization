@@ -1,4 +1,4 @@
-# Organization
+# organization
 
 A self-hosted personal organization web app for `organization.singha.io`.
 
