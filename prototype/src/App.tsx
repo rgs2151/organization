@@ -286,7 +286,6 @@ function ActionItem({
       onDoubleClick={(event) => event.stopPropagation()}
     >
       <button className="action-open" type="button" onClick={onOpen}>
-        <span className="action-drag" aria-hidden="true">⠿</span>
         <span className="action-title"><span>{action.title}</span></span>
       </button>
       <button
@@ -321,6 +320,7 @@ function ActionComposer({
 
   return (
     <form className="action-composer" onSubmit={submit}>
+      <span className="composer-mark" aria-hidden="true">+</span>
       <input
         autoFocus
         value={title}
@@ -331,7 +331,9 @@ function ActionComposer({
         placeholder="Type an action…"
         aria-label="New action title"
       />
-      <button type="submit">Add</button>
+      <button type="submit" aria-label="Create action" title="Create action">
+        <span aria-hidden="true">↵</span>
+      </button>
     </form>
   );
 }
@@ -752,6 +754,16 @@ export default function App() {
       <section className="someday-section">
         <div className="someday-heading">
           <h2>Someday</h2>
+          <span className="someday-separator" aria-hidden="true">·</span>
+          <button
+            className="someday-add"
+            type="button"
+            aria-label="Add a Someday action"
+            aria-expanded={composerTarget?.target === "someday"}
+            onClick={() => setComposerTarget({ target: "someday", index: somedayActions.length })}
+          >
+            +
+          </button>
         </div>
         <div
           className={`someday-grid ${dropListClass("someday", somedayActions)}`}

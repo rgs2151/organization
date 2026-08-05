@@ -49,9 +49,11 @@ The prototype validates the Actions workflow:
 - Product navigation is `Actions`, `Journal`, and `Activity`. Activity is its own expandable surface, never a footer repeated below calendar views.
 - The interface does not use motivational slogans or explanatory filler copy.
 - In the week view, double-clicking a day's open space creates an action directly in that day. There is no persistent `+ Add action` link.
-- `Someday` is a persistent heading above a subtle, content-sized inbox. Only the wrapped undated actions sit inside its boundary.
+- `Someday` is a persistent heading above a subtle, full-width inbox, leaving open space for direct creation and drop targets. Its `· +` control creates an undated action without removing the double-click shortcut.
 - Week columns grow with their actions rather than using a fixed viewport height. Scheduled actions have one consistent two-line height and truncate longer titles until their Action Page is opened.
 - Dragging an action draws a stable animated insertion marker at its exact destination without reflowing the list under the pointer.
+- Actions do not reveal a hover handle or shift their text. The entire action remains directly draggable without hover chrome.
+- New-action composers use the same inline input and icon-submit treatment across Someday, week, and month contexts, with size adjustments only for compact calendar cells.
 - The month view always shows every action. A calendar week grows to fit the busiest day in that row; actions are never collapsed behind a `+ more` counter.
 - The completion control remains on the right edge of an action and completion strikes through the title.
 - `Someday` remains the undated staging area and accepts actions dragged out of the calendar.
