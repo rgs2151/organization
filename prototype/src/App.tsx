@@ -233,6 +233,8 @@ function ActionItem({
   compact = false,
   bucket = false,
   isDragging = false,
+  dropBefore = false,
+  dropAfter = false,
   onOpen,
   onComplete,
   onDragStart,
@@ -244,6 +246,8 @@ function ActionItem({
   compact?: boolean;
   bucket?: boolean;
   isDragging?: boolean;
+  dropBefore?: boolean;
+  dropAfter?: boolean;
   onOpen: () => void;
   onComplete: () => void;
   onDragStart: (event: DragEvent<HTMLDivElement>) => void;
@@ -257,7 +261,7 @@ function ActionItem({
 
   return (
     <div
-      className={`action-item ${compact ? "is-compact" : ""} ${bucket ? "is-bucket" : ""} ${isDragging ? "is-dragging" : ""} ${action.completed ? "is-complete" : ""}`}
+      className={`action-item ${compact ? "is-compact" : ""} ${bucket ? "is-bucket" : ""} ${isDragging ? "is-dragging" : ""} ${dropBefore ? "is-drop-before" : ""} ${dropAfter ? "is-drop-after" : ""} ${action.completed ? "is-complete" : ""}`}
       data-action-id={action.id}
       draggable
       onDragStart={(event) => {
@@ -298,33 +302,6 @@ function ActionItem({
   );
 }
 
-function DropPreview({
-  compact = false,
-  bucket = false,
-  onDrop,
-}: {
-  compact?: boolean;
-  bucket?: boolean;
-  onDrop: (event: DragEvent<HTMLDivElement>, draggedId: string) => void;
-}) {
-  return (
-    <div
-      className={`drop-preview ${compact ? "is-compact" : ""} ${bucket ? "is-bucket" : ""}`}
-      aria-hidden="true"
-      onDragOver={(event) => {
-        event.preventDefault();
-        event.stopPropagation();
-      }}
-      onDrop={(event) => {
-        event.preventDefault();
-        event.stopPropagation();
-        const draggedId = event.dataTransfer.getData("text/action-id");
-        if (draggedId) onDrop(event, draggedId);
-      }}
-    />
-  );
-}
-
 function ActionComposer({
   onAdd,
   onCancel,
@@ -356,6 +333,34 @@ function ActionComposer({
       />
       <button type="submit">Add</button>
     </form>
+  );
+}
+
+function AccountControl({
+  signedIn,
+  onSignIn,
+  onSignOut,
+}: {
+  signedIn: boolean;
+  onSignIn: () => void;
+  onSignOut: () => void;
+}) {
+  if (!signedIn) {
+    return <button className="sign-in-button" type="button" onClick={onSignIn}>Sign in</button>;
+  }
+
+  return (
+    <details className="account-menu">
+      <summary aria-label="Open Rudra account menu">
+        <span className="account-name">Rudra</span>
+        <span className="account-avatar" aria-hidden="true">R</span>
+      </summary>
+      <div className="account-popover">
+        <strong>Rudra</strong>
+        <span>rgs2151@columbia.edu</span>
+        <button type="button" onClick={onSignOut}>Sign out</button>
+      </div>
+    </details>
   );
 }
 
@@ -534,6 +539,7 @@ export default function App() {
   const [activityYear, setActivityYear] = useState(2026);
   const [draggedId, setDraggedId] = useState<string | null>(null);
   const [dropTarget, setDropTarget] = useState<DropTarget | null>(null);
+  const [signedIn, setSignedIn] = useState(true);
 
   const selectedAction = actions.find((action) => action.id === selectedId) ?? null;
 
@@ -631,6 +637,55 @@ export default function App() {
     return isAfter ? orderedActions[hoveredIndex + 1]?.id : action.id;
   }
 
+  function beforeIdInContainer(
+    event: DragEvent<HTMLElement>,
+    targetActions: CalendarAction[],
+    layout: ActionLayout,
+  ) {
+    const container = event.currentTarget;
+    const orderedActions = targetActions.filter((candidate) => candidate.id !== draggedId);
+
+    for (const action of orderedActions) {
+      const element = container.querySelector<HTMLElement>(`[data-action-id="${action.id}"]`);
+      if (!element) continue;
+      const bounds = element.getBoundingClientRect();
+
+      if (layout === "vertical") {
+        if (event.clientY < bounds.top + bounds.height / 2) return action.id;
+        continue;
+      }
+
+      if (event.clientY < bounds.top) return action.id;
+      if (event.clientY <= bounds.bottom && event.clientX < bounds.left + bounds.width / 2) {
+        return action.id;
+      }
+    }
+
+    return undefined;
+  }
+
+  function previewContainerDrop(
+    event: DragEvent<HTMLElement>,
+    target: string,
+    targetActions: CalendarAction[],
+    layout: ActionLayout,
+  ) {
+    event.preventDefault();
+    if (!draggedId) return;
+    setDropTarget({ target, beforeId: beforeIdInContainer(event, targetActions, layout) });
+  }
+
+  function completeContainerDrop(
+    event: DragEvent<HTMLElement>,
+    target: string,
+    targetActions: CalendarAction[],
+    layout: ActionLayout,
+  ) {
+    event.preventDefault();
+    const droppedId = event.dataTransfer.getData("text/action-id");
+    if (droppedId) completeDrop(droppedId, target, beforeIdInContainer(event, targetActions, layout));
+  }
+
   function completeDrop(droppedId: string, target: string, beforeId?: string) {
     moveAction(droppedId, target === "someday" ? null : target, beforeId);
     setDraggedId(null);
@@ -645,11 +700,17 @@ export default function App() {
     compact = false,
     bucket = false,
   ) {
+    const remainingTargetActions = targetActions.filter((candidate) => candidate.id !== draggedId);
+    const isActiveTarget = Boolean(draggedId && dropTarget?.target === target);
+    const lastTargetId = remainingTargetActions[remainingTargetActions.length - 1]?.id;
+
     return {
       action,
       compact,
       bucket,
       isDragging: draggedId === action.id,
+      dropBefore: isActiveTarget && dropTarget?.beforeId === action.id,
+      dropAfter: isActiveTarget && dropTarget?.beforeId === undefined && lastTargetId === action.id,
       onOpen: () => setSelectedId(action.id),
       onComplete: () => updateAction(action.id, { completed: !action.completed }),
       onDragStart: () => {
@@ -673,15 +734,10 @@ export default function App() {
     };
   }
 
-  function renderDropPreview(target: string, beforeId?: string, compact = false, bucket = false) {
-    const isTarget = draggedId && dropTarget?.target === target && dropTarget.beforeId === beforeId;
-    return isTarget ? (
-      <DropPreview
-        compact={compact}
-        bucket={bucket}
-        onDrop={(_event, droppedId) => completeDrop(droppedId, target, beforeId)}
-      />
-    ) : null;
+  function dropListClass(target: string, targetActions: CalendarAction[]) {
+    const hasDropTarget = draggedId && dropTarget?.target === target;
+    const hasRemainingActions = targetActions.some((action) => action.id !== draggedId);
+    return hasDropTarget && !hasRemainingActions ? "is-drop-empty" : "";
   }
 
   function renderComposer(target: string, index?: number) {
@@ -693,34 +749,22 @@ export default function App() {
   function renderSomeday() {
     const somedayActions = actionsFor(null);
     return (
-      <section
-        className="someday-section"
-        onDragOver={(event) => {
-          event.preventDefault();
-          if (!draggedId) return;
-          setDropTarget({ target: "someday" });
-        }}
-        onDrop={(event) => {
-          event.preventDefault();
-          const id = event.dataTransfer.getData("text/action-id");
-          if (id) completeDrop(id, "someday");
-        }}
-        onDoubleClick={(event) => {
-          if ((event.target as HTMLElement).closest(".action-item, .action-composer")) return;
-          setComposerTarget({ target: "someday", index: somedayActions.length });
-        }}
-      >
+      <section className="someday-section">
         <div className="someday-heading">
           <h2>Someday</h2>
         </div>
-        <div className="someday-grid">
+        <div
+          className={`someday-grid ${dropListClass("someday", somedayActions)}`}
+          onDragOver={(event) => previewContainerDrop(event, "someday", somedayActions, "wrapped")}
+          onDrop={(event) => completeContainerDrop(event, "someday", somedayActions, "wrapped")}
+          onDoubleClick={(event) => {
+            if ((event.target as HTMLElement).closest(".action-item, .action-composer")) return;
+            setComposerTarget({ target: "someday", index: somedayActions.length });
+          }}
+        >
           {somedayActions.map((action) => (
-            <Fragment key={action.id}>
-              {renderDropPreview("someday", action.id, false, true)}
-              <ActionItem {...actionProps(action, "someday", somedayActions, "wrapped", false, true)} />
-            </Fragment>
+            <ActionItem key={action.id} {...actionProps(action, "someday", somedayActions, "wrapped", false, true)} />
           ))}
-          {renderDropPreview("someday", undefined, false, true)}
           {renderComposer("someday", somedayActions.length)}
         </div>
       </section>
@@ -748,23 +792,15 @@ export default function App() {
                 <article
                   className={`day-column ${key === todayKey ? "is-today" : ""}`}
                   key={key}
-                  onDragOver={(event) => {
-                    event.preventDefault();
-                    if (!draggedId) return;
-                    setDropTarget({ target: key });
-                  }}
-                  onDrop={(event) => {
-                    event.preventDefault();
-                    const id = event.dataTransfer.getData("text/action-id");
-                    if (id) completeDrop(id, key);
-                  }}
                 >
                   <header>
                     <strong>{day.getDate()} {MONTHS[day.getMonth()].slice(0, 3)}</strong>
                     <span>{WEEKDAYS[(day.getDay() + 6) % 7]}</span>
                   </header>
                   <div
-                    className="day-actions"
+                    className={`day-actions ${dropListClass(key, dayActions)}`}
+                    onDragOver={(event) => previewContainerDrop(event, key, dayActions, "vertical")}
+                    onDrop={(event) => completeContainerDrop(event, key, dayActions, "vertical")}
                     onDoubleClick={(event) => {
                       if ((event.target as HTMLElement).closest(".action-item, .action-composer")) return;
                       const bounds = event.currentTarget.getBoundingClientRect();
@@ -775,12 +811,10 @@ export default function App() {
                   >
                     {dayActions.map((action, index) => (
                       <Fragment key={action.id}>
-                        {renderDropPreview(key, action.id)}
                         {renderComposer(key, index)}
                         <ActionItem {...actionProps(action, key, dayActions)} />
                       </Fragment>
                     ))}
-                    {renderDropPreview(key)}
                     {renderComposer(key, dayActions.length)}
                   </div>
                 </article>
@@ -812,16 +846,6 @@ export default function App() {
                 <article
                   key={key}
                   className={`month-day ${day.getMonth() !== month ? "is-outside" : ""} ${key === todayKey ? "is-today" : ""}`}
-                  onDragOver={(event) => {
-                    event.preventDefault();
-                    if (!draggedId) return;
-                    setDropTarget({ target: key });
-                  }}
-                  onDrop={(event) => {
-                    event.preventDefault();
-                    const id = event.dataTransfer.getData("text/action-id");
-                    if (id) completeDrop(id, key);
-                  }}
                   onDoubleClick={(event) => {
                     if ((event.target as HTMLElement).closest(".action-item, .action-composer")) return;
                     setComposerTarget({ target: key, index: dayActions.length });
@@ -830,14 +854,14 @@ export default function App() {
                   <header>
                     <span>{day.getDate()}</span>
                   </header>
-                  <div className="month-actions">
+                  <div
+                    className={`month-actions ${dropListClass(key, dayActions)}`}
+                    onDragOver={(event) => previewContainerDrop(event, key, dayActions, "vertical")}
+                    onDrop={(event) => completeContainerDrop(event, key, dayActions, "vertical")}
+                  >
                     {dayActions.map((action) => (
-                      <Fragment key={action.id}>
-                        {renderDropPreview(key, action.id, true)}
-                        <ActionItem {...actionProps(action, key, dayActions, "vertical", true)} />
-                      </Fragment>
+                      <ActionItem key={action.id} {...actionProps(action, key, dayActions, "vertical", true)} />
                     ))}
-                    {renderDropPreview(key, undefined, true)}
                     {renderComposer(key, dayActions.length)}
                   </div>
                 </article>
@@ -866,7 +890,6 @@ export default function App() {
                 }}
               >
                 {monthName}
-                <span>Open month →</span>
               </button>
               <div className="mini-weekdays" aria-hidden="true">{WEEKDAYS.map((day) => <span key={day}>{day[0]}</span>)}</div>
               <div className="mini-days">
@@ -906,20 +929,11 @@ export default function App() {
           <button type="button" className={tab === "activity" ? "is-active" : ""} onClick={() => setTab("activity")}>Activity</button>
         </nav>
         <a className="brand" href="#top" aria-label="Organization home">organization</a>
-        {tab === "actions" && (
-          <div className="calendar-controls">
-            <div className="view-switch" aria-label="Calendar view">
-              {(["week", "month", "year"] as ViewMode[]).map((mode) => (
-                <button key={mode} type="button" className={view === mode ? "is-active" : ""} onClick={() => setView(mode)}>{mode}</button>
-              ))}
-            </div>
-            <button className="today-button" type="button" onClick={() => setFocusDate(new Date())}>Today</button>
-            <div className="period-nav">
-              <button type="button" onClick={() => navigate(-1)} aria-label={`Previous ${view}`}>←</button>
-              <button type="button" onClick={() => navigate(1)} aria-label={`Next ${view}`}>→</button>
-            </div>
-          </div>
-        )}
+        <AccountControl
+          signedIn={signedIn}
+          onSignIn={() => setSignedIn(true)}
+          onSignOut={() => setSignedIn(false)}
+        />
       </header>
 
       {tab === "actions" ? (
@@ -930,6 +944,18 @@ export default function App() {
               <span>{periodLabel(view, focusDate)}</span>
               <time>{periodTitle(view, focusDate)}</time>
             </h1>
+            <div className="calendar-controls">
+              <div className="view-switch" aria-label="Calendar view">
+                {(["week", "month", "year"] as ViewMode[]).map((mode) => (
+                  <button key={mode} type="button" className={view === mode ? "is-active" : ""} onClick={() => setView(mode)}>{mode}</button>
+                ))}
+              </div>
+              <button className="today-button" type="button" onClick={() => setFocusDate(new Date())}>Today</button>
+              <div className="period-nav">
+                <button type="button" onClick={() => navigate(-1)} aria-label={`Previous ${view}`}>←</button>
+                <button type="button" onClick={() => navigate(1)} aria-label={`Next ${view}`}>→</button>
+              </div>
+            </div>
           </section>
 
           {view === "week" && renderWeek()}

@@ -108,9 +108,101 @@ textarea:focus-visible {
   box-shadow: 0 1px 4px rgba(62, 59, 117, 0.13);
 }
 
+.account-menu {
+  position: relative;
+  grid-column: 3;
+  justify-self: end;
+}
+
+.account-menu summary {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  border-radius: 999px;
+  padding: 3px 3px 3px 11px;
+  color: #555550;
+  font-size: 12px;
+  font-weight: 720;
+  cursor: pointer;
+  list-style: none;
+}
+
+.account-menu summary::-webkit-details-marker {
+  display: none;
+}
+
+.account-menu summary:hover,
+.account-menu[open] summary {
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.account-avatar {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border: 1px solid rgba(92, 84, 189, 0.18);
+  border-radius: 50%;
+  background: linear-gradient(145deg, #ddd9ff, #b9f0d0);
+  color: #34334c;
+  font-size: 12px;
+  font-weight: 850;
+  box-shadow: 0 2px 7px rgba(41, 39, 76, 0.1);
+}
+
+.account-popover {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 9px);
+  right: 0;
+  display: flex;
+  width: 235px;
+  flex-direction: column;
+  border: 1px solid #d8d8d2;
+  border-radius: 12px;
+  padding: 13px;
+  background: rgba(255, 255, 255, 0.97);
+  box-shadow: 0 16px 40px rgba(31, 31, 27, 0.13);
+}
+
+.account-popover strong {
+  font-size: 13px;
+}
+
+.account-popover > span {
+  margin-top: 3px;
+  color: #898983;
+  font-size: 11px;
+}
+
+.account-popover button {
+  margin-top: 12px;
+  border: 0;
+  border-top: 1px solid #e2e2dc;
+  padding: 11px 2px 0;
+  background: transparent;
+  color: #6d5f65;
+  font-size: 11px;
+  font-weight: 720;
+  text-align: left;
+}
+
+.sign-in-button {
+  grid-column: 3;
+  justify-self: end;
+  border: 1px solid #d8d8d2;
+  border-radius: 999px;
+  padding: 9px 15px;
+  background: rgba(255, 255, 255, 0.72);
+  font-size: 12px;
+  font-weight: 740;
+}
+
 .period-heading {
   display: flex;
   align-items: center;
+  justify-content: space-between;
+  gap: 20px;
   min-height: 57px;
   padding: 13px 2px 11px;
 }
@@ -154,9 +246,7 @@ textarea:focus-visible {
 
 .calendar-controls {
   display: flex;
-  grid-column: 3;
   align-items: center;
-  justify-self: end;
   gap: 10px;
 }
 
@@ -309,6 +399,29 @@ textarea:focus-visible {
   transform: scale(0.97);
 }
 
+.action-item.is-drop-before::before,
+.action-item.is-drop-after::after {
+  position: absolute;
+  z-index: 3;
+  right: 4px;
+  left: 4px;
+  height: 3px;
+  border-radius: 999px;
+  background: #7768ee;
+  box-shadow: 0 0 0 3px rgba(220, 221, 255, 0.72);
+  content: "";
+  pointer-events: none;
+  animation: drop-marker-in 120ms ease-out;
+}
+
+.action-item.is-drop-before::before {
+  top: -2px;
+}
+
+.action-item.is-drop-after::after {
+  bottom: -2px;
+}
+
 .action-open {
   display: flex;
   min-width: 0;
@@ -408,22 +521,6 @@ textarea:focus-visible {
   background: white;
 }
 
-.drop-preview {
-  height: 54px;
-  min-height: 54px;
-  border: 1.5px dashed #8d7df3;
-  border-radius: 8px;
-  background: rgba(220, 221, 255, 0.52);
-  box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.58);
-  animation: drop-preview-in 150ms cubic-bezier(.2,.8,.2,1);
-}
-
-.drop-preview.is-compact {
-  height: 34px;
-  min-height: 34px;
-  border-radius: 7px;
-}
-
 .action-composer input {
   width: 100%;
   min-width: 0;
@@ -449,11 +546,6 @@ textarea:focus-visible {
 
 .someday-section {
   margin: 14px 0 2px;
-  border: 1px solid #d6d6d0;
-  border-radius: 13px;
-  padding: 13px 14px 14px;
-  background: rgba(255, 255, 255, 0.46);
-  box-shadow: 0 8px 22px rgba(35, 35, 30, 0.025);
   cursor: text;
 }
 
@@ -474,11 +566,18 @@ textarea:focus-visible {
 
 .someday-grid {
   display: flex;
+  width: fit-content;
+  max-width: 100%;
   min-height: 42px;
   flex-wrap: wrap;
   align-content: flex-start;
   align-items: flex-start;
   gap: 8px;
+  border: 1px solid #ddddd7;
+  border-radius: 10px;
+  padding: 8px;
+  background: rgba(255, 255, 255, 0.42);
+  transition: border-color 140ms ease, background 140ms ease;
 }
 
 .action-item.is-bucket {
@@ -511,11 +610,32 @@ textarea:focus-visible {
   flex-basis: 30px;
 }
 
-.drop-preview.is-bucket {
-  width: 132px;
-  height: 42px;
-  min-height: 42px;
-  flex: 0 0 132px;
+.action-item.is-bucket.is-drop-before::before,
+.action-item.is-bucket.is-drop-after::after {
+  top: 4px;
+  bottom: 4px;
+  width: 3px;
+  height: auto;
+}
+
+.action-item.is-bucket.is-drop-before::before {
+  right: auto;
+  left: -5px;
+}
+
+.action-item.is-bucket.is-drop-after::after {
+  right: -5px;
+  left: auto;
+}
+
+.day-actions.is-drop-empty,
+.month-actions.is-drop-empty,
+.someday-grid.is-drop-empty {
+  border-color: #8d7df3;
+  outline: 1px dashed rgba(119, 104, 238, 0.72);
+  outline-offset: -4px;
+  background-color: rgba(220, 221, 255, 0.3);
+  box-shadow: inset 0 0 0 2px rgba(220, 221, 255, 0.48);
 }
 
 .someday-grid .action-composer {
@@ -687,13 +807,6 @@ textarea:focus-visible {
   font-weight: 780;
   letter-spacing: -0.03em;
   text-align: left;
-}
-
-.mini-month-title span {
-  color: #9c9c96;
-  font-size: 9px;
-  font-weight: 650;
-  letter-spacing: 0;
 }
 
 .mini-weekdays,
@@ -1098,9 +1211,9 @@ textarea:focus-visible {
   to { opacity: 1; transform: translateY(0) scale(1); }
 }
 
-@keyframes drop-preview-in {
-  from { opacity: 0; transform: scaleY(0.35); }
-  to { opacity: 1; transform: scaleY(1); }
+@keyframes drop-marker-in {
+  from { opacity: 0; transform: scaleX(0.35); }
+  to { opacity: 1; transform: scaleX(1); }
 }
 
 @media (max-width: 980px) {
@@ -1140,22 +1253,32 @@ textarea:focus-visible {
   }
 
   .topbar {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
     align-items: center;
     gap: 12px;
     padding: 18px 0;
   }
 
   .brand {
-    grid-column: 1;
+    grid-column: 2;
     grid-row: 1;
   }
 
   .primary-tabs {
-    grid-column: 1;
+    grid-column: 1 / -1;
     grid-row: 2;
     justify-self: stretch;
     width: calc(100% - 2px);
+  }
+
+  .account-menu,
+  .sign-in-button {
+    grid-column: 3;
+    grid-row: 1;
+  }
+
+  .account-name {
+    display: none;
   }
 
   .primary-tabs button {
@@ -1171,10 +1294,12 @@ textarea:focus-visible {
   }
 
   .calendar-controls {
-    grid-column: 1;
-    grid-row: 3;
-    justify-self: stretch;
     width: 100%;
+  }
+
+  .period-heading {
+    align-items: flex-start;
+    flex-direction: column;
   }
 
   .year-view {
