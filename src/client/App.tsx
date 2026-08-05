@@ -32,7 +32,7 @@ type DropTarget = {
 type CalendarAction = OrganizationAction;
 
 const ACTION_COLOR_VALUES: Record<ActionColor, string> = {
-  plain: "transparent",
+  plain: "rgba(255, 255, 255, 0.76)",
   sun: "#ffea63",
   mint: "#65edac",
   lilac: "#cbc6ff",

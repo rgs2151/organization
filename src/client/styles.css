@@ -429,7 +429,9 @@ textarea:focus-visible {
   height: 54px;
   min-height: 54px;
   border-bottom: 1px solid var(--line);
-  transition: opacity 180ms ease, transform 180ms ease;
+  border-radius: 7px;
+  background: var(--action-color);
+  transition: opacity 180ms ease, transform 180ms ease, background 160ms ease;
 }
 
 .action-item:active {
@@ -488,11 +490,7 @@ textarea:focus-visible {
 
 .action-title > span {
   display: inline;
-  padding: 1px 3px;
-  border-radius: 5px;
-  background: var(--action-color);
-  box-decoration-break: clone;
-  -webkit-box-decoration-break: clone;
+  padding: 0;
 }
 
 .completion-button {
@@ -652,7 +650,7 @@ textarea:focus-visible {
   flex: 0 1 auto;
   border: 1px solid #deded8;
   border-radius: 9px;
-  background: rgba(255, 255, 255, 0.9);
+  background: var(--action-color, rgba(255, 255, 255, 0.9));
   box-shadow: 0 2px 7px rgba(32, 32, 27, 0.045);
 }
 
@@ -794,7 +792,7 @@ textarea:focus-visible {
   min-height: 34px;
   border: 1px solid #e2e2dc;
   border-radius: 7px;
-  background: white;
+  background: var(--action-color, white);
   box-shadow: 0 2px 5px rgba(30, 30, 25, 0.05);
 }
 
@@ -1270,7 +1268,7 @@ textarea:focus-visible {
   padding: 18px 20px 32px;
   color: #242431;
   font-family: var(--font-sans);
-  font-size: 13px;
+  font-size: 15px;
   line-height: 1.55;
   outline: none;
 }
@@ -1296,12 +1294,47 @@ textarea:focus-visible {
   line-height: 1.16;
 }
 
+.rich-note-content .collapsible-heading {
+  display: flex;
+  align-items: flex-start;
+  gap: 4px;
+}
+
+.rich-note-content .heading-collapse-button {
+  width: 20px;
+  height: 22px;
+  flex: 0 0 20px;
+  border: 0;
+  border-radius: 5px;
+  padding: 0;
+  background: transparent;
+  color: #777782;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  line-height: 1;
+}
+
+.rich-note-content .heading-collapse-button:hover,
+.rich-note-content .heading-collapse-button:focus-visible {
+  background: rgba(102, 90, 240, 0.1);
+  color: #4e46a7;
+}
+
+.rich-note-content .collapsible-heading-content {
+  min-width: 0;
+  flex: 1;
+}
+
+.rich-note-content .is-collapsed-section-content {
+  display: none;
+}
+
 .rich-note-content h1 {
-  font-size: 22px;
+  font-size: 24px;
 }
 
 .rich-note-content h2 {
-  font-size: 18px;
+  font-size: 20px;
 }
 
 .rich-note-content h3 {

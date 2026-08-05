@@ -7,6 +7,7 @@ import { EditorContent, useEditor, useEditorState } from "@tiptap/react";
 import { StarterKit } from "@tiptap/starter-kit";
 import type { RichTextDocument } from "../shared/contracts";
 import { uploadActionImage } from "./api";
+import { CollapsibleHeading } from "./CollapsibleHeading";
 
 type RichNoteEditorProps = {
   actionId: string;
@@ -41,9 +42,10 @@ export default function RichNoteEditor({ actionId, note, onChange }: RichNoteEdi
   const editor = useEditor({
     extensions: [
       StarterKit.configure({
-        heading: { levels: [1, 2, 3] },
+        heading: false,
         link: { openOnClick: false },
       }),
+      CollapsibleHeading.configure({ levels: [1, 2] }),
       TaskList,
       TaskItem.configure({ nested: true }),
       Image.configure({

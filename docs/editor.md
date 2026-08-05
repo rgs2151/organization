@@ -6,7 +6,7 @@ The Action Page is the first consumer of Organization's shared writing surface. 
 
 The editor currently supports:
 
-- headings at three levels;
+- collapsible H1 and H2 sections;
 - bold, italic, and underline;
 - bullet and numbered lists;
 - interactive checked and unchecked task lists;
@@ -15,6 +15,8 @@ The editor currently supports:
 - image selection, paste, and drop.
 
 Tiptap provides the headless editing engine and keyboard behavior. The editor is loaded only when an Action Page opens, so it does not increase the initial calendar bundle. All styling and interface controls belong to Organization.
+
+Heading collapse follows document hierarchy. An H1 owns everything until the next H1. An H2 owns everything until the next H2 or H1. The disclosure state is stored in the document with the heading.
 
 ## Persistence
 
