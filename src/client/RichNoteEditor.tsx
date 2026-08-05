@@ -87,19 +87,20 @@ export default function RichNoteEditor({ actionId, note, onChange }: RichNoteEdi
 
   const state = useEditorState({
     editor,
-    selector: ({ editor: current }) => ({
-      h1: current?.isActive("heading", { level: 1 }) ?? false,
-      h2: current?.isActive("heading", { level: 2 }) ?? false,
-      bold: current?.isActive("bold") ?? false,
-      italic: current?.isActive("italic") ?? false,
-      underline: current?.isActive("underline") ?? false,
-      bullet: current?.isActive("bulletList") ?? false,
-      ordered: current?.isActive("orderedList") ?? false,
-      task: current?.isActive("taskList") ?? false,
-      quote: current?.isActive("blockquote") ?? false,
-      canUndo: current?.can().undo() ?? false,
-      canRedo: current?.can().redo() ?? false,
-    }),
+    selector: ({ editor: current }) => {
+      if (!current || current.isDestroyed) return EMPTY_TOOLBAR_STATE;
+      return {
+        h1: current.isActive("heading", { level: 1 }),
+        h2: current.isActive("heading", { level: 2 }),
+        bold: current.isActive("bold"),
+        italic: current.isActive("italic"),
+        underline: current.isActive("underline"),
+        bullet: current.isActive("bulletList"),
+        ordered: current.isActive("orderedList"),
+        task: current.isActive("taskList"),
+        quote: current.isActive("blockquote"),
+      };
+    },
   });
 
   function chooseImage(event: ChangeEvent<HTMLInputElement>) {
@@ -130,8 +131,8 @@ export default function RichNoteEditor({ actionId, note, onChange }: RichNoteEdi
           onClick={() => fileInput.current?.click()}
         />
         <span className="toolbar-spacer" />
-        <ToolbarButton label="↶" title="Undo" disabled={!state?.canUndo} onClick={() => editor?.chain().focus().undo().run()} />
-        <ToolbarButton label="↷" title="Redo" disabled={!state?.canRedo} onClick={() => editor?.chain().focus().redo().run()} />
+        <ToolbarButton label="↶" title="Undo" onClick={() => editor?.chain().focus().undo().run()} />
+        <ToolbarButton label="↷" title="Redo" onClick={() => editor?.chain().focus().redo().run()} />
         <input
           ref={fileInput}
           className="visually-hidden"
@@ -146,6 +147,18 @@ export default function RichNoteEditor({ actionId, note, onChange }: RichNoteEdi
     </section>
   );
 }
+
+const EMPTY_TOOLBAR_STATE = {
+  h1: false,
+  h2: false,
+  bold: false,
+  italic: false,
+  underline: false,
+  bullet: false,
+  ordered: false,
+  task: false,
+  quote: false,
+};
 
 function ToolbarButton({
   label,
