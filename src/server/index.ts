@@ -12,16 +12,13 @@ import { ActionRepository, InputError, NotFoundError } from "./action-repository
 import { AttachmentRepository } from "./attachment-repository.js";
 import { config } from "./config.js";
 import { openDatabase } from "./database.js";
+import { SessionResolver, UnauthorizedError } from "./session.js";
+import { applySecurityHeaders, InvalidPathError, serveClient } from "./static-files.js";
 
-const database = openDatabase(config.databasePath);
+const database = openDatabase(config.databasePath, config.migrationsDirectory);
 const repository = new ActionRepository(database);
 const attachments = new AttachmentRepository(database);
-const developmentSession = {
-  user: config.developmentUser,
-  mode: "development" as const,
-};
-
-repository.ensureDevelopmentUser(developmentSession.user);
+const sessions = new SessionResolver(repository, config);
 
 const server = createServer(async (request, response) => {
   try {
@@ -29,6 +26,14 @@ const server = createServer(async (request, response) => {
   } catch (error) {
     if (error instanceof InputError || error instanceof SyntaxError) {
       sendJson(response, 400, { error: error.message });
+      return;
+    }
+    if (error instanceof InvalidPathError) {
+      sendJson(response, 400, { error: "The requested path is invalid." });
+      return;
+    }
+    if (error instanceof UnauthorizedError) {
+      sendJson(response, 401, { error: error.message });
       return;
     }
     if (error instanceof NotFoundError) {
@@ -43,14 +48,23 @@ const server = createServer(async (request, response) => {
 async function route(request: IncomingMessage, response: ServerResponse) {
   const method = request.method ?? "GET";
   const url = new URL(request.url ?? "/", `http://${request.headers.host ?? "localhost"}`);
-  const ownerId = developmentSession.user.id;
+  const isApiPath = url.pathname === "/api" || url.pathname.startsWith("/api/");
 
   if (method === "GET" && url.pathname === "/api/health") {
-    sendJson(response, 200, { status: "ok" });
+    sendJson(response, 200, { status: "ok", version: "0.3.0" });
     return;
   }
+  if ((method === "GET" || method === "HEAD") && !isApiPath) {
+    if (await serveClient(request, response, url.pathname, config.clientDirectory)) return;
+    sendJson(response, 404, { error: "Not found." });
+    return;
+  }
+
+  const session = sessions.resolve(request);
+  const ownerId = session.user.id;
+
   if (method === "GET" && url.pathname === "/api/session") {
-    sendJson(response, 200, developmentSession);
+    sendJson(response, 200, session);
     return;
   }
   if (method === "GET" && url.pathname === "/api/actions") {
@@ -101,6 +115,7 @@ async function route(request: IncomingMessage, response: ServerResponse) {
   if (attachmentMatch && method === "GET") {
     const attachment = attachments.get(ownerId, attachmentMatch[1]);
     const bytes = await readFile(path.join(config.uploadDirectory, attachment.storageKey));
+    applySecurityHeaders(response);
     response.writeHead(200, {
       "content-type": attachment.contentType,
       "content-length": String(bytes.byteLength),
@@ -210,6 +225,7 @@ function attachmentIds(document: RichTextNode) {
 }
 
 function sendJson(response: ServerResponse, status: number, body: unknown) {
+  applySecurityHeaders(response);
   response.writeHead(status, {
     "content-type": "application/json; charset=utf-8",
     "cache-control": "no-store",
@@ -218,8 +234,9 @@ function sendJson(response: ServerResponse, status: number, body: unknown) {
   response.end(JSON.stringify(body));
 }
 
-server.listen(config.port, "127.0.0.1", () => {
-  console.log(`organization api: http://127.0.0.1:${config.port}`);
+server.listen(config.port, config.host, () => {
+  console.log(`organization server: http://${config.host}:${config.port}`);
+  console.log(`organization auth: ${config.authMode}`);
   console.log(`organization database: ${config.databasePath}`);
 });
 

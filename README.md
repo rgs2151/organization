@@ -1,42 +1,36 @@
 # organization
 
-A self-hosted personal organization app for getting responsibilities out of your head and into a calm visual plan.
+A calm, self-hosted system for moving responsibilities out of your head and into a trustworthy visual plan.
 
-`organization` is now an active development application. It runs locally with a React client, a small HTTP API, and a durable SQLite database. Production packaging and integration with `organization.singha.io` are intentionally deferred.
+The approved Actions experience is now frozen as the application foundation. The repository contains the React interface, owner-scoped Node API, SQLite persistence, image storage, production container, and automated GHCR publishing workflow. Journal remains intentionally unavailable while its product model is still undefined.
 
-## Current application
+## What it does
 
-- Capture undated work in the persistent **Someday** inbox.
-- Plan and reorganize actions across week, month, and year views.
-- Open an Action Page for title, date, color, notes, and completion.
-- Write structured notes with headings, emphasis, lists, interactive checklists, quotes, code, and images.
-- Drag actions within a day or between dates without losing their order.
-- Record real completion timestamps for the Activity view.
-- Keep every record scoped to a server-resolved owner.
+- Capture undated work in a persistent **Someday** inbox.
+- Schedule and reorder actions across week and month calendars.
+- Navigate the year without losing the compact planning model.
+- Open an Action Page with date, color, completion, and structured notes.
+- Write headings, lists, checklists, quotes, code, and image attachments.
+- Track only completed actions in a GitHub-inspired yearly Activity heatmap.
+- Keep every action and attachment scoped to the authenticated owner.
 
-The product language and interaction decisions are maintained in [docs/product.md](./docs/product.md).
+Product language and settled interaction rules live in [docs/product.md](./docs/product.md). The editor contract is documented in [docs/editor.md](./docs/editor.md).
 
-## Architecture
+## System shape
 
 ```mermaid
 flowchart LR
-    Browser["React client\n127.0.0.1:3000"] -->|"/api through Vite proxy"| API["Node HTTP API\n127.0.0.1:3001"]
-    API --> Identity["Development identity adapter"]
-    API --> Repository["Owner-scoped repository"]
-    Repository --> SQLite[("SQLite + WAL\nvar/organization.sqlite")]
-    API --> Media[("Owned image files\nvar/uploads")]
-    MediaMeta["Attachment ownership metadata"] --> SQLite
-    Migrations["Versioned SQL migrations"] --> SQLite
-    Authentik["Authentik session adapter\nproduction phase"] -. replaces .-> Identity
+    Browser["Browser"] --> Gateway["Caddy + Authentik forward auth"]
+    Gateway -->|"Verified X-Authentik headers"| App["organization container\nNode server + React client"]
+    App --> SQLite[("/data/organization.sqlite")]
+    App --> Uploads[("/data/uploads")]
+    GitHub["Push to repository"] --> Actions["GitHub Actions\nchecks + container smoke test"]
+    Actions --> GHCR["ghcr.io/rgs2151/organization"]
 ```
 
-The browser never chooses the data owner. During local development, the server resolves one explicitly configured development identity. Production startup is refused until that adapter is replaced with verified Authentik session data.
+The application is one container and one process. The Node server owns the API, serves the compiled React application, applies database migrations on startup, and exposes `/api/health` for orchestration. SQLite uses WAL mode, foreign keys, a busy timeout, strict tables, and ordered SQL migrations.
 
-SQLite is embedded in the application process and runs in WAL mode with foreign keys, a busy timeout, strict tables, and versioned migrations. Image bytes live outside the database while ownership metadata stays relational. All runtime state is ignored by Git.
-
-The writing surface is documented in [docs/editor.md](./docs/editor.md).
-
-## Run locally
+## Local development
 
 Requirements: Node.js 24.15 or newer and npm.
 
@@ -45,38 +39,65 @@ npm install
 npm run dev
 ```
 
-Open [http://127.0.0.1:3000](http://127.0.0.1:3000). The command starts both the Vite client and the local API, with live reload for each.
-
-The default development identity is Rudra. Override it or the database location with the variables documented in [.env.example](./.env.example). Environment files are ignored.
-
-## Development commands
+Open [http://127.0.0.1:3000](http://127.0.0.1:3000). Development mode runs Vite on port 3000 and the API on port 3001 with an explicit local identity and seeded sample data.
 
 | Command | Purpose |
 | --- | --- |
-| `npm run dev` | Start the client and API together |
-| `npm run dev:web` | Start only the Vite client |
-| `npm run dev:api` | Start only the API with restart-on-change |
-| `npm run check` | Type-check client and server |
-| `npm test` | Exercise the SQLite action lifecycle in an isolated database |
-| `npm run build` | Validate and compile the browser application |
+| `npm run dev` | Start the client and API with live reload |
+| `npm run check` | Type-check the client and server |
+| `npm test` | Test owner isolation, persistence, attachments, and identity linking |
+| `npm run build` | Compile the browser app and production server |
+| `npm start` | Run the compiled single-process application |
+
+Local variables are described in [.env.example](./.env.example). Runtime state under `var/` and all environment files remain outside Git.
+
+## Container
+
+Build and run an isolated local container:
+
+```bash
+docker build -t organization:local .
+docker run --rm \
+  --publish 127.0.0.1:3002:3000 \
+  --volume organization-data:/data \
+  --env ORGANIZATION_AUTH_MODE=development \
+  --env ORGANIZATION_ALLOW_DEVELOPMENT_AUTH=true \
+  organization:local
+```
+
+Open `http://127.0.0.1:3002`. The explicit development-auth override is only for a loopback-bound local container.
+
+The production image defaults to Authentik proxy authentication, listens on port `3000`, and stores all durable state beneath `/data`. It must be reachable only through the private Docker network behind Caddy and Authentik; do not publish its port directly on a public interface. See [docs/deployment.md](./docs/deployment.md) for the runtime contract.
+
+## Automated image publishing
+
+Every repository update runs application checks, builds the container, starts it with an isolated temporary database, verifies both the health endpoint and application shell, and then publishes the image to `ghcr.io/rgs2151/organization`.
+
+Published tags:
+
+- `latest` and `main` for the newest accepted build;
+- `sha-<commit>` for an immutable source revision.
+
+The published image includes build provenance and a software bill of materials. This workflow builds the artifact only; integration with `organization.singha.io` and the private-server deployment workflow is deliberately deferred.
 
 ## Repository map
 
 ```text
 organization/
-├── docs/                 product direction and decisions
+├── .github/workflows/    validation and GHCR publishing
+├── docs/                 product, editor, and deployment contracts
 ├── migrations/           ordered SQLite schema migrations
 ├── scripts/              local development orchestration
 ├── src/
 │   ├── client/           React interface and API client
-│   ├── server/           HTTP API, identity boundary, and repositories
+│   ├── server/           HTTP server, identity, storage, and repositories
 │   └── shared/           client/server data contracts
-├── var/                  ignored local database state
+├── Dockerfile            production multi-stage image
 ├── index.html
 ├── package.json
 └── vite.config.ts
 ```
 
-## Deliberate development boundary
+## Next phase
 
-This phase does not contain a Dockerfile, reverse-proxy configuration, domain routing, or a production identity adapter. Those belong to the later deployment phase, after the application model and development workflow are stable.
+The next isolated task is Notion calendar migration. No general-purpose importer or upload UI is included in this release; the migration will be designed against the actual exported ZIP so source dates, completion values, titles, and page content can be mapped deliberately.

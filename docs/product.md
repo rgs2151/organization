@@ -23,8 +23,8 @@ This is an original product built from those interaction principles. It is not i
 - **Action:** one responsibility or thing to do.
 - **Action Page:** the focused detail surface for an action's title, date, notes, color, and completion state.
 - **Someday:** an undated staging area for captured responsibilities that are not ready to schedule.
-- **Activity:** a year-level record of completed actions.
-- **Journal:** the future reflection surface; intentionally outside this prototype's functional scope.
+- **Activity:** a year-level record of when actions were completed. Creating or scheduling an action does not count.
+- **Journal:** the future reflection surface; intentionally outside the current functional scope and displayed only as “Not available yet.”
 
 ## Current Actions foundation
 
@@ -60,6 +60,7 @@ The development app implements the Actions workflow:
 - The month view always shows every action. A calendar week grows to fit the busiest day in that row; actions are never collapsed behind a `+ more` counter.
 - The completion control remains on the right edge of an action and completion strikes through the title.
 - `Someday` remains the undated staging area and accepts actions dragged out of the calendar.
+- Activity counts each checked action on the UTC date when it was completed. Its four green intensity bands are normalized against that year's busiest completion day, so the darkest cells always represent the highest daily output.
 
 ## Deliberate technical decisions
 
@@ -70,7 +71,7 @@ The development app implements the Actions workflow:
 - A small Node HTTP API rather than a server framework.
 - SQLite in WAL mode with strict tables, foreign keys, ordered SQL migrations, and owner-scoped queries.
 - Server-resolved identity. Local development uses an explicit development adapter; production will use verified Authentik session data.
-- No container or server-infrastructure coupling during application development.
+- The application ships as one non-root container, while routing, secrets, volumes, and deployment ownership remain in the separate private-server repository.
 - Tiptap is used as a headless, on-demand editor engine. Organization owns its appearance, persistence, uploads, and interaction surface.
 
 ## Explicitly deferred
@@ -81,6 +82,6 @@ The development app implements the Actions workflow:
 - collaboration and action assignment;
 - calendar-provider synchronization;
 - the Journal data model and editor;
-- Authentik session integration and production deployment packaging.
+- private-server routing, Authentik provider creation, and production deployment.
 
 Local development instructions live in the repository [README](../README.md).

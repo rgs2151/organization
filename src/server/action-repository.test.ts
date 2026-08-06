@@ -77,3 +77,42 @@ test("actions remain owner-scoped and support the complete persistence lifecycle
   repository.delete(owner.id, created.id);
   assert.equal(repository.list(owner.id).some((action) => action.id === created.id), false);
 });
+
+test("authenticated identities create empty accounts and safely claim a matching imported email", (context) => {
+  const directory = mkdtempSync(path.join(tmpdir(), "organization-identity-test-"));
+  const database = openDatabase(path.join(directory, "organization.sqlite"));
+  context.after(() => {
+    database.close();
+    rmSync(directory, { recursive: true, force: true });
+  });
+
+  const repository = new ActionRepository(database);
+  const newUser = repository.ensureAuthenticatedUser({
+    subject: "family-subject",
+    email: "family@example.com",
+    displayName: "Family Member",
+  });
+  assert.equal(repository.list(newUser.id).length, 0);
+
+  const importedOwner = {
+    id: "import-rudra",
+    displayName: "Rudra Import",
+    email: "rudra@example.com",
+  };
+  repository.ensureDevelopmentUser(importedOwner);
+  const linked = repository.ensureAuthenticatedUser({
+    subject: "rudra-subject",
+    email: "rudra@example.com",
+    displayName: "Rudra",
+  });
+  assert.equal(linked.id, importedOwner.id);
+  assert.equal(repository.list(linked.id).length, 14);
+
+  const repeated = repository.ensureAuthenticatedUser({
+    subject: "rudra-subject",
+    email: "rudra@example.com",
+    displayName: "Rudramani Singha",
+  });
+  assert.equal(repeated.id, importedOwner.id);
+  assert.equal(repeated.displayName, "Rudramani Singha");
+});

@@ -1,6 +1,6 @@
 {
   "name": "organization",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
   "type": "module",
   "engines": {
@@ -12,7 +12,8 @@
     "dev:api": "tsx watch src/server/index.ts",
     "check": "tsc -p tsconfig.client.json && tsc -p tsconfig.server.json",
     "test": "tsx --test src/server/*.test.ts",
-    "build": "npm run check && vite build",
+    "build": "npm run check && vite build && tsc -p tsconfig.server.build.json",
+    "start": "node dist/server/server/index.js",
     "preview": "vite preview --host 127.0.0.1 --port 3000"
   },
   "dependencies": {

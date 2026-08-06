@@ -349,14 +349,32 @@ function ActivityHeatmap({
   const cells = useMemo(() => {
     const yearStart = new Date(year, 0, 1);
     const gridStart = startOfWeek(yearStart);
-    return Array.from({ length: 371 }, (_, index) => {
+    const gridEnd = addDays(startOfWeek(new Date(year, 11, 31)), 6);
+    const dayCount = Math.round(
+      (Date.UTC(gridEnd.getFullYear(), gridEnd.getMonth(), gridEnd.getDate())
+        - Date.UTC(gridStart.getFullYear(), gridStart.getMonth(), gridStart.getDate()))
+      / 86_400_000,
+    ) + 1;
+    const maximum = Math.max(1, ...completedByDate.values());
+    return Array.from({ length: dayCount }, (_, index) => {
       const date = addDays(gridStart, index);
       if (date.getFullYear() !== year) return { key: `empty-${index}`, date: null, count: 0, level: 0 };
       const key = toDateKey(date);
       const count = completedByDate.get(key) ?? 0;
-      return { key, date, count, level: Math.min(4, count) };
+      const level = count === 0 ? 0 : Math.min(4, Math.ceil((count / maximum) * 4));
+      return { key, date, count, level };
     });
   }, [completedByDate, year]);
+
+  const availableYears = useMemo(() => {
+    const years = new Set([new Date().getFullYear(), year]);
+    actions.forEach((action) => {
+      if (action.completed && action.completedAt) {
+        years.add(Number(action.completedAt.slice(0, 4)));
+      }
+    });
+    return [...years].filter(Number.isInteger).sort((left, right) => right - left);
+  }, [actions, year]);
 
   const total = cells.reduce((sum, cell) => sum + cell.count, 0);
 
@@ -386,7 +404,7 @@ function ActivityHeatmap({
           <div className="heatmap-legend"><span>Quiet</span><i className="level-0" /><i className="level-1" /><i className="level-2" /><i className="level-3" /><i className="level-4" /><span>Flow</span></div>
         </div>
         <div className="activity-years" aria-label="Activity year">
-          {[2026, 2025, 2024].map((candidate) => (
+          {availableYears.map((candidate) => (
             <button
               key={candidate}
               type="button"
@@ -412,7 +430,7 @@ export default function App() {
   const [serverError, setServerError] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [composerTarget, setComposerTarget] = useState<{ target: string; index?: number } | null>(null);
-  const [activityYear, setActivityYear] = useState(2026);
+  const [activityYear, setActivityYear] = useState(() => new Date().getFullYear());
   const [draggedId, setDraggedId] = useState<string | null>(null);
   const [dropTarget, setDropTarget] = useState<DropTarget | null>(null);
   const pendingPatches = useRef(new Map<string, UpdateActionInput>());

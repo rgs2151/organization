@@ -2,7 +2,10 @@ import { mkdirSync, readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 
-export function openDatabase(databasePath: string) {
+export function openDatabase(
+  databasePath: string,
+  migrationsDirectory = path.resolve(process.cwd(), "migrations"),
+) {
   mkdirSync(path.dirname(databasePath), { recursive: true });
 
   const database = new DatabaseSync(databasePath, {
@@ -20,13 +23,12 @@ export function openDatabase(databasePath: string) {
     ) STRICT;
   `);
 
-  applyMigrations(database);
+  applyMigrations(database, migrationsDirectory);
   database.exec("PRAGMA optimize;");
   return database;
 }
 
-function applyMigrations(database: DatabaseSync) {
-  const migrationsDirectory = path.resolve(import.meta.dirname, "../../migrations");
+function applyMigrations(database: DatabaseSync, migrationsDirectory: string) {
   const migrationFiles = readdirSync(migrationsDirectory)
     .filter((file) => file.endsWith(".sql"))
     .sort();

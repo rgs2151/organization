@@ -1,0 +1,108 @@
+name: Publish container
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: organization-container
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  validate:
+    name: Validate application and container
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Test and build
+        run: npm test && npm run build
+
+      - name: Build container
+        run: docker build --tag organization:validation .
+
+      - name: Smoke-test container
+        run: |
+          docker run --detach --name organization-validation \
+            --publish 127.0.0.1:3000:3000 \
+            organization:validation
+          for attempt in $(seq 1 20); do
+            if curl --fail --silent http://127.0.0.1:3000/api/health >/dev/null; then
+              curl --fail --silent http://127.0.0.1:3000/ >/dev/null
+              test "$(curl --silent --output /dev/null --write-out '%{http_code}' http://127.0.0.1:3000/api/session)" = "401"
+              curl --fail --silent \
+                --header 'X-Authentik-Meta-App: organization' \
+                --header 'X-Authentik-Uid: validation-user' \
+                --header 'X-Authentik-Email: validation@example.com' \
+                --header 'X-Authentik-Name: Validation User' \
+                http://127.0.0.1:3000/api/session >/dev/null
+              exit 0
+            fi
+            sleep 1
+          done
+          docker logs organization-validation
+          exit 1
+
+  publish:
+    name: Build and publish
+    needs: validate
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v4
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Generate image metadata
+        id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=ref,event=branch
+            type=sha,prefix=sha-
+            type=raw,value=latest,enable=${{ github.ref_name == 'main' }}
+
+      - name: Build and publish image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: ./Dockerfile
+          platforms: linux/amd64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          provenance: mode=max
+          sbom: true

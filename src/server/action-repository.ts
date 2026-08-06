@@ -21,6 +21,12 @@ type ActionRow = {
   color: string;
 };
 
+type UserRow = {
+  id: string;
+  email: string;
+  display_name: string;
+};
+
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
 export class ActionRepository {
@@ -65,6 +71,44 @@ export class ActionRepository {
         );
       }
     });
+  }
+
+  ensureAuthenticatedUser(identity: {
+    subject: string;
+    email: string;
+    displayName: string;
+  }): OrganizationUser {
+    const bySubject = this.database.prepare(`
+      SELECT id, email, display_name
+      FROM organization_users
+      WHERE provider_subject = ?
+    `).get(identity.subject) as unknown as UserRow | undefined;
+    const byEmail = this.database.prepare(`
+      SELECT id, email, display_name
+      FROM organization_users
+      WHERE email = ? COLLATE NOCASE
+    `).get(identity.email) as unknown as UserRow | undefined;
+
+    if (bySubject && byEmail && bySubject.id !== byEmail.id) {
+      throw new Error("The authenticated subject and email belong to different users.");
+    }
+
+    const existing = bySubject ?? byEmail;
+    if (existing) {
+      this.database.prepare(`
+        UPDATE organization_users
+        SET provider_subject = ?, email = ?, display_name = ?, updated_at = CURRENT_TIMESTAMP
+        WHERE id = ?
+      `).run(identity.subject, identity.email, identity.displayName, existing.id);
+      return { id: existing.id, email: identity.email, displayName: identity.displayName };
+    }
+
+    const id = `authentik:${identity.subject}`;
+    this.database.prepare(`
+      INSERT INTO organization_users(id, provider_subject, email, display_name)
+      VALUES (?, ?, ?, ?)
+    `).run(id, identity.subject, identity.email, identity.displayName);
+    return { id, email: identity.email, displayName: identity.displayName };
   }
 
   list(ownerId: string): OrganizationAction[] {
