@@ -118,6 +118,12 @@ function prettyDate(key: string | null) {
   });
 }
 
+function activityLevel(count: number, completedDayCounts: number[]) {
+  if (count === 0 || completedDayCounts.length === 0) return 0;
+  const daysAtOrBelow = completedDayCounts.findLastIndex((value) => value <= count) + 1;
+  return Math.min(4, Math.max(1, Math.ceil((daysAtOrBelow / completedDayCounts.length) * 4)));
+}
+
 function ActionItem({
   action,
   compact = false,
@@ -355,13 +361,13 @@ function ActivityHeatmap({
         - Date.UTC(gridStart.getFullYear(), gridStart.getMonth(), gridStart.getDate()))
       / 86_400_000,
     ) + 1;
-    const maximum = Math.max(1, ...completedByDate.values());
+    const completedDayCounts = [...completedByDate.values()].sort((left, right) => left - right);
     return Array.from({ length: dayCount }, (_, index) => {
       const date = addDays(gridStart, index);
       if (date.getFullYear() !== year) return { key: `empty-${index}`, date: null, count: 0, level: 0 };
       const key = toDateKey(date);
       const count = completedByDate.get(key) ?? 0;
-      const level = count === 0 ? 0 : Math.min(4, Math.ceil((count / maximum) * 4));
+      const level = activityLevel(count, completedDayCounts);
       return { key, date, count, level };
     });
   }, [completedByDate, year]);

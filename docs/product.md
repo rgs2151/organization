@@ -60,7 +60,7 @@ The development app implements the Actions workflow:
 - The month view always shows every action. A calendar week grows to fit the busiest day in that row; actions are never collapsed behind a `+ more` counter.
 - The completion control remains on the right edge of an action and completion strikes through the title.
 - `Someday` remains the undated staging area and accepts actions dragged out of the calendar.
-- Activity counts each checked action on the UTC date when it was completed. Its four green intensity bands are normalized against that year's busiest completion day, so the darkest cells always represent the highest daily output.
+- Activity counts each checked action on the UTC date when it was completed. Its four green intensity bands divide nonempty days into GitHub-style completion-count quartiles; tied counts share a band and the busiest days use the darkest color.
 
 ## Deliberate technical decisions
 
