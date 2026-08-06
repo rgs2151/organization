@@ -79,7 +79,7 @@ async function route(request: IncomingMessage, response: ServerResponse) {
 
   const uploadMatch = url.pathname.match(/^\/api\/actions\/([^/]+)\/attachments$/);
   if (uploadMatch && method === "POST") {
-    const actionId = uploadMatch[1];
+    const actionId = decodePathSegment(uploadMatch[1]);
     attachments.requireOwnedAction(ownerId, actionId);
     const contentType = singleHeader(request.headers["content-type"])?.split(";", 1)[0] ?? "";
     const extension = imageExtension(contentType);
@@ -113,7 +113,7 @@ async function route(request: IncomingMessage, response: ServerResponse) {
 
   const attachmentMatch = url.pathname.match(/^\/api\/attachments\/([^/]+)$/);
   if (attachmentMatch && method === "GET") {
-    const attachment = attachments.get(ownerId, attachmentMatch[1]);
+    const attachment = attachments.get(ownerId, decodePathSegment(attachmentMatch[1]));
     const bytes = await readFile(path.join(config.uploadDirectory, attachment.storageKey));
     applySecurityHeaders(response);
     response.writeHead(200, {
@@ -129,12 +129,13 @@ async function route(request: IncomingMessage, response: ServerResponse) {
 
   const actionMatch = url.pathname.match(/^\/api\/actions\/([^/]+)$/);
   if (actionMatch && method === "PATCH") {
+    const actionId = decodePathSegment(actionMatch[1]);
     const input = await readJson<UpdateActionInput>(request);
-    const action = repository.update(ownerId, actionMatch[1], input);
+    const action = repository.update(ownerId, actionId, input);
     if (input.note) {
       const storageKeys = attachments.deleteUnreferenced(
         ownerId,
-        actionMatch[1],
+        actionId,
         attachmentIds(input.note),
       );
       await Promise.all(storageKeys.map((storageKey) =>
@@ -145,8 +146,9 @@ async function route(request: IncomingMessage, response: ServerResponse) {
     return;
   }
   if (actionMatch && method === "DELETE") {
-    const storageKeys = attachments.storageKeysForAction(ownerId, actionMatch[1]);
-    repository.delete(ownerId, actionMatch[1]);
+    const actionId = decodePathSegment(actionMatch[1]);
+    const storageKeys = attachments.storageKeysForAction(ownerId, actionId);
+    repository.delete(ownerId, actionId);
     await Promise.all(storageKeys.map((storageKey) =>
       unlink(path.join(config.uploadDirectory, storageKey)).catch(() => undefined),
     ));
@@ -157,7 +159,9 @@ async function route(request: IncomingMessage, response: ServerResponse) {
   const moveMatch = url.pathname.match(/^\/api\/actions\/([^/]+)\/move$/);
   if (moveMatch && method === "POST") {
     const input = await readJson<MoveActionInput>(request);
-    sendJson(response, 200, { actions: repository.move(ownerId, moveMatch[1], input) });
+    sendJson(response, 200, {
+      actions: repository.move(ownerId, decodePathSegment(moveMatch[1]), input),
+    });
     return;
   }
 
@@ -210,6 +214,14 @@ function safeFilename(encoded: string) {
     throw new InputError("The image filename is invalid.");
   }
   return decoded.replace(/[\u0000-\u001f/\\]/g, "_").slice(0, 180) || "image";
+}
+
+function decodePathSegment(value: string) {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    throw new InputError("The request path contains an invalid identifier.");
+  }
 }
 
 function attachmentIds(document: RichTextNode) {

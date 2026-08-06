@@ -387,6 +387,17 @@ function ActivityHeatmap({
   }, [actions, year]);
 
   const total = cells.reduce((sum, cell) => sum + cell.count, 0);
+  const gridStart = startOfWeek(new Date(year, 0, 1));
+  const weekCount = Math.ceil(cells.length / 7);
+  const monthColumns = MONTHS.map((month, monthIndex) => {
+    const monthStart = new Date(year, monthIndex, 1);
+    const dayOffset = Math.round(
+      (Date.UTC(monthStart.getFullYear(), monthStart.getMonth(), monthStart.getDate())
+        - Date.UTC(gridStart.getFullYear(), gridStart.getMonth(), gridStart.getDate()))
+      / 86_400_000,
+    );
+    return { month, column: Math.floor(dayOffset / 7) + 1 };
+  });
 
   return (
     <section className="activity-section" aria-labelledby="activity-title">
@@ -396,8 +407,14 @@ function ActivityHeatmap({
 
       <div className="activity-card">
         <div className="heatmap-wrap">
-          <div className="heatmap-months" aria-hidden="true">
-            {MONTHS.map((month) => <span key={month}>{month.slice(0, 3)}</span>)}
+          <div
+            className="heatmap-months"
+            style={{ gridTemplateColumns: `repeat(${weekCount}, minmax(11px, 1fr))` }}
+            aria-hidden="true"
+          >
+            {monthColumns.map(({ month, column }) => (
+              <span key={month} style={{ gridColumnStart: column }}>{month.slice(0, 3)}</span>
+            ))}
           </div>
           <div className="heatmap-body">
             <div className="heatmap-weekdays" aria-hidden="true"><span>Mon</span><span>Wed</span><span>Fri</span></div>
