@@ -120,7 +120,11 @@ function prettyDate(key: string | null) {
 
 function activityLevel(count: number, completedDayCounts: number[]) {
   if (count === 0 || completedDayCounts.length === 0) return 0;
-  const daysAtOrBelow = completedDayCounts.findLastIndex((value) => value <= count) + 1;
+  let daysAtOrBelow = 0;
+  for (const value of completedDayCounts) {
+    if (value > count) break;
+    daysAtOrBelow += 1;
+  }
   return Math.min(4, Math.max(1, Math.ceil((daysAtOrBelow / completedDayCounts.length) * 4)));
 }
 
