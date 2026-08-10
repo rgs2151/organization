@@ -82,17 +82,22 @@ textarea:focus-visible {
 }
 
 .server-error {
+  position: fixed;
+  z-index: 100;
+  right: 22px;
+  bottom: 22px;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 14px;
-  margin: 10px 0 0;
+  width: min(420px, calc(100vw - 32px));
   border: 1px solid #e9b7b7;
   border-radius: 9px;
   padding: 9px 12px;
   background: #fff1f1;
   color: #7b3131;
   font-size: 12px;
+  box-shadow: 0 12px 34px rgba(69, 32, 32, 0.16);
 }
 
 .server-error button {

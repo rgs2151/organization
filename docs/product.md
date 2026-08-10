@@ -46,6 +46,7 @@ The development app implements the Actions workflow:
 
 ## Established interaction rules
 
+- The approved Actions interface is a frozen product surface. No substantial layout, navigation, wording, or interaction change is made without explicit user approval; reliability and accessibility fixes preserve its geometry and visual language.
 - The global toolbar contains product tabs at the left, the `organization` name in the center, and the current user's account control at the right.
 - Calendar scale, Today, and period navigation live beside the current period because they affect the dated calendar, not the persistent `Someday` inbox.
 - Product navigation is `Actions`, `Journal`, and `Activity`. Activity is its own expandable surface, never a footer repeated below calendar views.
@@ -61,6 +62,7 @@ The development app implements the Actions workflow:
 - The completion control remains on the right edge of an action and completion strikes through the title.
 - `Someday` remains the undated staging area and accepts actions dragged out of the calendar.
 - Activity counts each checked action on the UTC date when it was completed. Its four green intensity bands divide nonempty days into GitHub-style completion-count quartiles; tied counts share a band and the busiest days use the darkest color.
+- Operational errors appear as small floating notifications and never reflow or displace the application navigation.
 
 ## Deliberate technical decisions
 
@@ -73,15 +75,15 @@ The development app implements the Actions workflow:
 - Server-resolved identity. Local development uses an explicit development adapter; production will use verified Authentik session data.
 - The application ships as one non-root container, while routing, secrets, volumes, and deployment ownership remain in the separate private-server repository.
 - Tiptap is used as a headless, on-demand editor engine. Organization owns its appearance, persistence, uploads, and interaction surface.
+- Browser state is server-authoritative. Returning from sleep, focus loss, or connectivity loss revalidates the session and actions before continued use.
+- One application-owned Streamable HTTP MCP endpoint exposes narrow owner-scoped tools through revocable credentials and the same repository operations as the web API.
 
 ## Explicitly deferred
 
-- Authentik/OIDC integration;
 - Notion import and migration tooling;
 - recurring actions, reminders, notifications, and time-of-day scheduling;
 - collaboration and action assignment;
 - calendar-provider synchronization;
-- the Journal data model and editor;
-- private-server routing, Authentik provider creation, and production deployment.
+- Journal persistence and its guided-reflection tool set.
 
 Local development instructions live in the repository [README](../README.md).

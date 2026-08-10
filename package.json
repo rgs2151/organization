@@ -1,6 +1,6 @@
 {
   "name": "organization",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "private": true,
   "type": "module",
   "engines": {
@@ -10,13 +10,15 @@
     "dev": "node scripts/dev.mjs",
     "dev:web": "vite --host 127.0.0.1 --port 3000",
     "dev:api": "tsx watch src/server/index.ts",
+    "mcp-token": "tsx src/server/mcp-token.ts",
     "check": "tsc -p tsconfig.client.json && tsc -p tsconfig.server.json",
-    "test": "tsx --test src/server/*.test.ts",
+    "test": "tsx --test src/server/*.test.ts src/client/*.test.ts",
     "build": "npm run check && vite build && tsc -p tsconfig.server.build.json",
     "start": "node dist/server/server/index.js",
     "preview": "vite preview --host 127.0.0.1 --port 3000"
   },
   "dependencies": {
+    "@modelcontextprotocol/server": "^2.0.0",
     "@tiptap/extension-heading": "^3.29.2",
     "@tiptap/extension-image": "^3.29.2",
     "@tiptap/extension-list": "^3.29.2",
@@ -25,9 +27,11 @@
     "@tiptap/react": "^3.29.2",
     "@tiptap/starter-kit": "^3.29.2",
     "react": "19.2.6",
-    "react-dom": "19.2.6"
+    "react-dom": "19.2.6",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@modelcontextprotocol/client": "^2.0.0",
     "@types/node": "^24.10.0",
     "@types/react": "19.2.14",
     "@types/react-dom": "19.2.3",

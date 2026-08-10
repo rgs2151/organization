@@ -48,6 +48,8 @@ export const config = {
   migrationsDirectory: resolveFromRoot(process.env.ORGANIZATION_MIGRATIONS_PATH, "migrations"),
   authMode,
   authentikAppSlug: process.env.ORGANIZATION_AUTHENTIK_APP_SLUG ?? "organization",
+  publicOrigin: process.env.ORGANIZATION_PUBLIC_ORIGIN
+    ?? (nodeEnvironment === "production" ? "https://organization.singha.io" : "http://127.0.0.1:3001"),
   developmentUser: {
     id: process.env.ORGANIZATION_DEV_USER_ID ?? "dev-rudra",
     displayName: process.env.ORGANIZATION_DEV_USER_NAME ?? "Rudra",
@@ -57,4 +59,13 @@ export const config = {
 
 if (!Number.isInteger(config.port) || config.port < 1 || config.port > 65535) {
   throw new Error("ORGANIZATION_API_PORT must be a valid TCP port.");
+}
+
+try {
+  const publicOrigin = new URL(config.publicOrigin);
+  if (publicOrigin.origin !== config.publicOrigin || !["http:", "https:"].includes(publicOrigin.protocol)) {
+    throw new Error();
+  }
+} catch {
+  throw new Error("ORGANIZATION_PUBLIC_ORIGIN must be an HTTP(S) origin without a path.");
 }

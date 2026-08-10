@@ -8,17 +8,21 @@ import type {
   RichTextNode,
   UpdateActionInput,
 } from "../shared/contracts.js";
-import { ActionRepository, InputError, NotFoundError } from "./action-repository.js";
+import { ActionRepository, ConflictError, InputError, NotFoundError } from "./action-repository.js";
 import { AttachmentRepository } from "./attachment-repository.js";
 import { config } from "./config.js";
 import { openDatabase } from "./database.js";
+import { createOrganizationMcp } from "./mcp.js";
+import { McpTokenRepository } from "./mcp-token-repository.js";
 import { SessionResolver, UnauthorizedError } from "./session.js";
 import { applySecurityHeaders, InvalidPathError, serveClient } from "./static-files.js";
 
 const database = openDatabase(config.databasePath, config.migrationsDirectory);
 const repository = new ActionRepository(database);
 const attachments = new AttachmentRepository(database);
+const mcpTokens = new McpTokenRepository(database);
 const sessions = new SessionResolver(repository, config);
+const mcp = createOrganizationMcp(repository, mcpTokens, config.publicOrigin);
 
 const server = createServer(async (request, response) => {
   try {
@@ -36,6 +40,10 @@ const server = createServer(async (request, response) => {
       sendJson(response, 401, { error: error.message });
       return;
     }
+    if (error instanceof ConflictError) {
+      sendJson(response, 409, { error: error.message });
+      return;
+    }
     if (error instanceof NotFoundError) {
       sendJson(response, 404, { error: error.message });
       return;
@@ -50,8 +58,13 @@ async function route(request: IncomingMessage, response: ServerResponse) {
   const url = new URL(request.url ?? "/", `http://${request.headers.host ?? "localhost"}`);
   const isApiPath = url.pathname === "/api" || url.pathname.startsWith("/api/");
 
+  if (url.pathname === "/mcp") {
+    await mcp.handle(request, response);
+    return;
+  }
+
   if (method === "GET" && url.pathname === "/api/health") {
-    sendJson(response, 200, { status: "ok", version: "0.3.0" });
+    sendJson(response, 200, { status: "ok", version: "0.4.0" });
     return;
   }
   if ((method === "GET" || method === "HEAD") && !isApiPath) {
@@ -254,8 +267,10 @@ server.listen(config.port, config.host, () => {
 
 function shutdown() {
   server.close(() => {
-    database.close();
-    process.exit(0);
+    void mcp.close().finally(() => {
+      database.close();
+      process.exit(0);
+    });
   });
 }
 

@@ -7,20 +7,68 @@ import type {
   UpdateActionInput,
 } from "../shared/contracts";
 
+export const AUTHENTICATION_REQUIRED_EVENT = "organization:authentication-required";
+
+export class AuthenticationRequiredError extends Error {
+  constructor() {
+    super("Your Organization session needs to be renewed.");
+    this.name = "AuthenticationRequiredError";
+  }
+}
+
+export class ConnectionError extends Error {
+  constructor() {
+    super("Organization could not reach the server. It will retry when the connection returns.");
+    this.name = "ConnectionError";
+  }
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(path, {
-    ...init,
-    headers: init?.body
-      ? { "content-type": "application/json", ...init.headers }
-      : init?.headers,
-  });
+  let response: Response;
+  try {
+    response = await fetch(path, {
+      ...init,
+      cache: "no-store",
+      credentials: "same-origin",
+      redirect: "manual",
+      headers: init?.body
+        ? { "content-type": "application/json", ...init.headers }
+        : init?.headers,
+    });
+  } catch {
+    throw new ConnectionError();
+  }
+
+  if (
+    response.type === "opaqueredirect"
+    || (response.status >= 300 && response.status < 400)
+    || response.status === 401
+    || response.status === 403
+    || response.redirected
+  ) {
+    notifyAuthenticationRequired();
+    throw new AuthenticationRequiredError();
+  }
 
   if (!response.ok) {
     const payload = await response.json().catch(() => null) as { error?: string } | null;
     throw new Error(payload?.error ?? `Request failed with status ${response.status}.`);
   }
   if (response.status === 204) return undefined as T;
+  if (!response.headers.get("content-type")?.toLowerCase().includes("application/json")) {
+    throw new Error("Organization received an unexpected response from the server.");
+  }
   return response.json() as Promise<T>;
+}
+
+export function isAuthenticationRequired(error: unknown): error is AuthenticationRequiredError {
+  return error instanceof AuthenticationRequiredError;
+}
+
+function notifyAuthenticationRequired() {
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new Event(AUTHENTICATION_REQUIRED_EVENT));
+  }
 }
 
 export async function loadApplication() {

@@ -2,7 +2,7 @@
 
 A calm, self-hosted system for moving responsibilities out of your head and into a trustworthy visual plan.
 
-The approved Actions experience is now frozen as the application foundation. The repository contains the React interface, owner-scoped Node API, SQLite persistence, image storage, production container, and automated GHCR publishing workflow. Journal remains intentionally unavailable while its product model is still undefined.
+The approved Actions experience is frozen as the application foundation. The repository contains the React interface, owner-scoped Node API, SQLite persistence, image storage, application-owned MCP endpoint, production container, and automated GHCR publishing workflow. Journal remains intentionally unavailable while its product model is being designed.
 
 ## What it does
 
@@ -13,6 +13,8 @@ The approved Actions experience is now frozen as the application foundation. The
 - Write headings, lists, checklists, quotes, code, and image attachments.
 - Track only completed actions in a GitHub-inspired yearly Activity heatmap.
 - Keep every action and attachment scoped to the authenticated owner.
+- Let trusted agents use the same owner-scoped operations through revocable MCP credentials.
+- Recover cleanly when a browser returns after sleep, disconnection, or an expired login.
 
 Product language and settled interaction rules live in [docs/product.md](./docs/product.md). The editor contract is documented in [docs/editor.md](./docs/editor.md).
 
@@ -22,6 +24,8 @@ Product language and settled interaction rules live in [docs/product.md](./docs/
 flowchart LR
     Browser["Browser"] --> Gateway["Caddy + Authentik forward auth"]
     Gateway -->|"Verified X-Authentik headers"| App["organization container\nNode server + React client"]
+    Agent["Trusted MCP client"] -->|"Bearer credential"| MCP["/mcp"]
+    MCP --> App
     App --> SQLite[("/data/organization.sqlite")]
     App --> Uploads[("/data/uploads")]
     GitHub["Push to repository"] --> Actions["GitHub Actions\nchecks + container smoke test"]
@@ -45,7 +49,7 @@ Open [http://127.0.0.1:3000](http://127.0.0.1:3000). Development mode runs Vite 
 | --- | --- |
 | `npm run dev` | Start the client and API with live reload |
 | `npm run check` | Type-check the client and server |
-| `npm test` | Test owner isolation, persistence, attachments, and identity linking |
+| `npm test` | Test owner isolation, persistence, identity, browser failure classification, and MCP |
 | `npm run build` | Compile the browser app and production server |
 | `npm start` | Run the compiled single-process application |
 
@@ -67,7 +71,7 @@ docker run --rm \
 
 Open `http://127.0.0.1:3002`. The explicit development-auth override is only for a loopback-bound local container.
 
-The production image defaults to Authentik proxy authentication, listens on port `3000`, and stores all durable state beneath `/data`. It must be reachable only through the private Docker network behind Caddy and Authentik; do not publish its port directly on a public interface. See [docs/deployment.md](./docs/deployment.md) for the runtime contract.
+The production image defaults to Authentik proxy authentication, listens on port `3000`, and stores all durable state beneath `/data`. It must be reachable only through the private Docker network behind Caddy; browser routes use Authentik forward auth and `/mcp` uses hashed, revocable credentials. Do not publish the container port directly. See [docs/deployment.md](./docs/deployment.md) and [docs/mcp.md](./docs/mcp.md).
 
 ## Automated image publishing
 
@@ -78,7 +82,7 @@ Published tags:
 - `latest` and `main` for the newest accepted build;
 - `sha-<commit>` for an immutable source revision.
 
-The published image includes build provenance and a software bill of materials. This workflow builds the artifact only; integration with `organization.singha.io` and the private-server deployment workflow is deliberately deferred.
+The published image includes build provenance and a software bill of materials. The private-server repository consumes it by immutable digest and routes `organization.singha.io` to it.
 
 ## Repository map
 
@@ -100,4 +104,4 @@ organization/
 
 ## Next phase
 
-The next isolated task is Notion calendar migration. No general-purpose importer or upload UI is included in this release; the migration will be designed against the actual exported ZIP so source dates, completion values, titles, and page content can be mapped deliberately.
+The unified MCP currently exposes Actions, Action Page notes, and Activity. Journal tools will be added to the same endpoint only after the Journal data model and guided-reflection contract are approved.

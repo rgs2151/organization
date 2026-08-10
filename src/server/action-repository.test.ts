@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { ActionRepository } from "./action-repository.js";
+import { ActionRepository, ConflictError } from "./action-repository.js";
 import { AttachmentRepository } from "./attachment-repository.js";
 import { openDatabase } from "./database.js";
 
@@ -44,6 +44,10 @@ test("actions remain owner-scoped and support the complete persistence lifecycle
   assert.equal(updated.note.content?.[0]?.content?.[0]?.text, "Stored in SQLite");
   assert.equal(updated.completed, true);
   assert.ok(updated.completedAt);
+  assert.ok(updated.revision > created.revision);
+  assert.throws(() => repository.update(owner.id, created.id, {
+    title: "Overwrite a newer action",
+  }, created.revision), ConflictError);
 
   attachments.create(owner.id, created.id, {
     id: "attachment-kept",

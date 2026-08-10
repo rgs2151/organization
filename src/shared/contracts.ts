@@ -32,6 +32,7 @@ export const EMPTY_NOTE: RichTextDocument = {
 
 export type OrganizationAction = {
   id: string;
+  revision: number;
   title: string;
   date: string | null;
   note: RichTextDocument;
@@ -53,6 +54,15 @@ export type UpdateActionInput = Partial<
 export type MoveActionInput = {
   date: string | null;
   beforeId?: string;
+};
+
+export type McpTokenSummary = {
+  id: string;
+  name: string;
+  scopes: string[];
+  createdAt: string;
+  lastUsedAt: string | null;
+  revokedAt: string | null;
 };
 
 export type ActionAttachment = {

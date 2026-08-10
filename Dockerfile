@@ -8,7 +8,7 @@ RUN npm ci
 COPY index.html vite.config.ts tsconfig*.json ./
 COPY migrations ./migrations
 COPY src ./src
-RUN npm run build
+RUN npm run build && npm prune --omit=dev
 
 FROM node:24.18.1-alpine AS runtime
 
@@ -17,11 +17,13 @@ ENV NODE_ENV=production \
     ORGANIZATION_API_PORT=3000 \
     ORGANIZATION_DATABASE_PATH=/data/organization.sqlite \
     ORGANIZATION_UPLOAD_PATH=/data/uploads \
-    ORGANIZATION_AUTHENTIK_APP_SLUG=organization
+    ORGANIZATION_AUTHENTIK_APP_SLUG=organization \
+    ORGANIZATION_PUBLIC_ORIGIN=https://organization.singha.io
 
 WORKDIR /app
 
 COPY --from=build --chown=node:node /app/dist ./dist
+COPY --from=build --chown=node:node /app/node_modules ./node_modules
 COPY --chown=node:node migrations ./migrations
 COPY --chown=node:node package.json ./package.json
 

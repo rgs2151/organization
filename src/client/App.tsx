@@ -462,26 +462,40 @@ export default function App() {
   const [dropTarget, setDropTarget] = useState<DropTarget | null>(null);
   const pendingPatches = useRef(new Map<string, UpdateActionInput>());
   const patchTimers = useRef(new Map<string, number>());
+  const lastSuccessfulSync = useRef(0);
+  const synchronization = useRef<Promise<boolean> | null>(null);
+  const reconnecting = useRef(false);
 
   useEffect(() => {
     let active = true;
-    api.loadApplication()
-      .then((application) => {
-        if (!active) return;
-        setSession(application.session);
-        setActions(application.actions);
-        setServerError(null);
-      })
-      .catch((error: unknown) => {
-        if (active) setServerError(errorMessage(error));
-      })
-      .finally(() => {
-        if (active) setLoading(false);
-      });
+    const reconnect = () => {
+      if (reconnecting.current) return;
+      reconnecting.current = true;
+      window.location.reload();
+    };
+    const synchronizeAfterResume = () => {
+      if (!active || document.visibilityState === "hidden") return;
+      if (Date.now() - lastSuccessfulSync.current < 30_000) return;
+      void reloadApplication();
+    };
+
+    void reloadApplication().finally(() => {
+      if (active) setLoading(false);
+    });
+    window.addEventListener(api.AUTHENTICATION_REQUIRED_EVENT, reconnect);
+    window.addEventListener("focus", synchronizeAfterResume);
+    window.addEventListener("online", synchronizeAfterResume);
+    window.addEventListener("pageshow", synchronizeAfterResume);
+    document.addEventListener("visibilitychange", synchronizeAfterResume);
 
     return () => {
       active = false;
       patchTimers.current.forEach((timer) => window.clearTimeout(timer));
+      window.removeEventListener(api.AUTHENTICATION_REQUIRED_EVENT, reconnect);
+      window.removeEventListener("focus", synchronizeAfterResume);
+      window.removeEventListener("online", synchronizeAfterResume);
+      window.removeEventListener("pageshow", synchronizeAfterResume);
+      document.removeEventListener("visibilitychange", synchronizeAfterResume);
     };
   }, []);
 
@@ -501,7 +515,7 @@ export default function App() {
       setActions((current) => insertAction(current, newAction, beforeId));
       setServerError(null);
     } catch (error) {
-      setServerError(errorMessage(error));
+      handleApplicationError(error);
     }
   }
 
@@ -531,8 +545,7 @@ export default function App() {
           : action));
         setServerError(null);
       } catch (error) {
-        setServerError(errorMessage(error));
-        void reloadApplication();
+        if (!handleApplicationError(error)) void reloadApplication();
       }
     }, 250);
     patchTimers.current.set(id, timer);
@@ -570,15 +583,31 @@ export default function App() {
     });
   }
 
-  async function reloadApplication() {
-    try {
-      const application = await api.loadApplication();
-      setSession(application.session);
-      setActions(application.actions);
-      setServerError(null);
-    } catch (error) {
-      setServerError(errorMessage(error));
-    }
+  function reloadApplication() {
+    if (synchronization.current) return synchronization.current;
+    const pending = api.loadApplication()
+      .then((application) => {
+        setSession(application.session);
+        setActions(application.actions);
+        setServerError(null);
+        lastSuccessfulSync.current = Date.now();
+        return true;
+      })
+      .catch((error: unknown) => {
+        handleApplicationError(error);
+        return false;
+      })
+      .finally(() => {
+        synchronization.current = null;
+      });
+    synchronization.current = pending;
+    return pending;
+  }
+
+  function handleApplicationError(error: unknown) {
+    if (api.isAuthenticationRequired(error)) return true;
+    setServerError(errorMessage(error));
+    return false;
   }
 
   function navigate(direction: -1 | 1) {
@@ -669,8 +698,7 @@ export default function App() {
         setServerError(null);
       })
       .catch((error: unknown) => {
-        setServerError(errorMessage(error));
-        void reloadApplication();
+        if (!handleApplicationError(error)) void reloadApplication();
       });
   }
 
@@ -992,8 +1020,7 @@ export default function App() {
             setActions((current) => current.filter((action) => action.id !== selectedAction.id));
             setSelectedId(null);
             void api.deleteAction(selectedAction.id).catch((error: unknown) => {
-              setServerError(errorMessage(error));
-              void reloadApplication();
+              if (!handleApplicationError(error)) void reloadApplication();
             });
           }}
         />

@@ -13,6 +13,7 @@ import { DEVELOPMENT_ACTIONS } from "./development-seed.js";
 
 type ActionRow = {
   id: string;
+  revision: number;
   title: string;
   scheduled_for: string | null;
   note_document: string;
@@ -113,7 +114,7 @@ export class ActionRepository {
 
   list(ownerId: string): OrganizationAction[] {
     const rows = this.database.prepare(`
-      SELECT id, title, scheduled_for, note_document, completed, completed_at, color
+      SELECT id, revision, title, scheduled_for, note_document, completed, completed_at, color
       FROM actions
       WHERE owner_id = ?
       ORDER BY scheduled_for IS NOT NULL, scheduled_for, position, created_at
@@ -141,11 +142,31 @@ export class ActionRepository {
     return this.getRequired(ownerId, id);
   }
 
-  update(ownerId: string, id: string, input: UpdateActionInput): OrganizationAction {
+  get(ownerId: string, id: string) {
+    return this.getRequired(ownerId, id);
+  }
+
+  findUserByEmail(email: string) {
+    const row = this.database.prepare(`
+      SELECT id, email, display_name
+      FROM organization_users
+      WHERE email = ? COLLATE NOCASE
+    `).get(email) as unknown as UserRow | undefined;
+    return row ? { id: row.id, email: row.email, displayName: row.display_name } : null;
+  }
+
+  update(
+    ownerId: string,
+    id: string,
+    input: UpdateActionInput,
+    expectedRevision?: number,
+  ): OrganizationAction {
     const current = this.getRequired(ownerId, id);
+    requireRevision(current.revision, expectedRevision);
 
     if (Object.hasOwn(input, "date") && input.date !== current.date) {
-      this.move(ownerId, id, { date: validateDate(input.date ?? null) });
+      this.move(ownerId, id, { date: validateDate(input.date ?? null) }, expectedRevision);
+      expectedRevision = undefined;
     }
 
     const assignments: string[] = [];
@@ -170,20 +191,27 @@ export class ActionRepository {
     }
 
     if (assignments.length > 0) {
-      assignments.push("updated_at = CURRENT_TIMESTAMP");
+      assignments.push("revision = revision + 1", "updated_at = CURRENT_TIMESTAMP");
       const result = this.database.prepare(`
         UPDATE actions SET ${assignments.join(", ")}
         WHERE owner_id = ? AND id = ?
-      `).run(...values, ownerId, id) as StatementResultingChanges;
-      if (result.changes !== 1) throw new NotFoundError("Action not found.");
+          AND (? IS NULL OR revision = ?)
+      `).run(...values, ownerId, id, expectedRevision ?? null, expectedRevision ?? null) as StatementResultingChanges;
+      if (result.changes !== 1) throw new ConflictError("The action changed after it was read. Reload it and try again.");
     }
 
     return this.getRequired(ownerId, id);
   }
 
-  move(ownerId: string, id: string, input: MoveActionInput): OrganizationAction[] {
+  move(
+    ownerId: string,
+    id: string,
+    input: MoveActionInput,
+    expectedRevision?: number,
+  ): OrganizationAction[] {
     const date = validateDate(input.date);
     const current = this.getRequired(ownerId, id);
+    requireRevision(current.revision, expectedRevision);
 
     this.transaction(() => {
       const targetIds = this.idsForDate(ownerId, date).filter((candidate) => candidate !== id);
@@ -191,7 +219,7 @@ export class ActionRepository {
       targetIds.splice(beforeIndex >= 0 ? beforeIndex : targetIds.length, 0, id);
       this.database.prepare(`
         UPDATE actions
-        SET scheduled_for = ?, position = 0, updated_at = CURRENT_TIMESTAMP
+        SET scheduled_for = ?, position = 0, revision = revision + 1, updated_at = CURRENT_TIMESTAMP
         WHERE owner_id = ? AND id = ?
       `).run(date, ownerId, id);
       this.reindex(ownerId, date, targetIds);
@@ -203,15 +231,19 @@ export class ActionRepository {
     return this.list(ownerId);
   }
 
-  delete(ownerId: string, id: string) {
-    const result = this.database.prepare("DELETE FROM actions WHERE owner_id = ? AND id = ?")
-      .run(ownerId, id) as StatementResultingChanges;
-    if (result.changes !== 1) throw new NotFoundError("Action not found.");
+  delete(ownerId: string, id: string, expectedRevision?: number) {
+    const current = this.getRequired(ownerId, id);
+    requireRevision(current.revision, expectedRevision);
+    const result = this.database.prepare(`
+      DELETE FROM actions
+      WHERE owner_id = ? AND id = ? AND (? IS NULL OR revision = ?)
+    `).run(ownerId, id, expectedRevision ?? null, expectedRevision ?? null) as StatementResultingChanges;
+    if (result.changes !== 1) throw new ConflictError("The action changed after it was read. Reload it and try again.");
   }
 
   private getRequired(ownerId: string, id: string) {
     const row = this.database.prepare(`
-      SELECT id, title, scheduled_for, note_document, completed, completed_at, color
+      SELECT id, revision, title, scheduled_for, note_document, completed, completed_at, color
       FROM actions WHERE owner_id = ? AND id = ?
     `).get(ownerId, id) as unknown as ActionRow | undefined;
     if (!row) throw new NotFoundError("Action not found.");
@@ -251,6 +283,7 @@ export class ActionRepository {
 function toAction(row: ActionRow): OrganizationAction {
   return {
     id: row.id,
+    revision: row.revision,
     title: row.title,
     date: row.scheduled_for,
     note: parseNote(row.note_document),
@@ -302,3 +335,10 @@ function parseNote(serialized: string): RichTextDocument {
 
 export class InputError extends Error {}
 export class NotFoundError extends Error {}
+export class ConflictError extends Error {}
+
+function requireRevision(current: number, expected?: number) {
+  if (expected !== undefined && current !== expected) {
+    throw new ConflictError("The action changed after it was read. Reload it and try again.");
+  }
+}
