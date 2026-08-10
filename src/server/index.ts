@@ -64,7 +64,7 @@ async function route(request: IncomingMessage, response: ServerResponse) {
   }
 
   if (method === "GET" && url.pathname === "/api/health") {
-    sendJson(response, 200, { status: "ok", version: "0.4.0" });
+    sendJson(response, 200, { status: "ok", version: "0.5.0" });
     return;
   }
   if ((method === "GET" || method === "HEAD") && !isApiPath) {
@@ -80,6 +80,23 @@ async function route(request: IncomingMessage, response: ServerResponse) {
     sendJson(response, 200, session);
     return;
   }
+  if (method === "GET" && url.pathname === "/api/settings/mcp-credentials") {
+    sendJson(response, 200, { credentials: mcpTokens.list(ownerId) });
+    return;
+  }
+  if (method === "POST" && url.pathname === "/api/settings/mcp-credentials") {
+    const input = await readJson<{ name: string }>(request);
+    sendJson(response, 201, mcpTokens.create(ownerId, input.name));
+    return;
+  }
+
+  const mcpCredentialMatch = url.pathname.match(/^\/api\/settings\/mcp-credentials\/([^/]+)$/);
+  if (mcpCredentialMatch && method === "DELETE") {
+    const id = decodePathSegment(mcpCredentialMatch[1]);
+    sendJson(response, 200, { credential: mcpTokens.revoke(ownerId, id) });
+    return;
+  }
+
   if (method === "GET" && url.pathname === "/api/actions") {
     sendJson(response, 200, { actions: repository.list(ownerId) });
     return;

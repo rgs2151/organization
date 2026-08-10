@@ -65,6 +65,11 @@ export type McpTokenSummary = {
   revokedAt: string | null;
 };
 
+export type CreatedMcpToken = {
+  token: string;
+  credential: McpTokenSummary;
+};
+
 export type ActionAttachment = {
   id: string;
   src: string;

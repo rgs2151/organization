@@ -17,6 +17,8 @@ Journal, goals, reflection sessions, and future modules belong on this same endp
 
 Every client receives its own revocable bearer credential. Organization stores only a token hash, resolves every call to one owner, enforces read/write scopes, and records tool name, result, target identifier, token, and time without logging titles or note contents. The route never accepts Internet-supplied Authentik identity headers.
 
+Users manage credentials from **Account → Settings → MCP**. The page shows the server URL, creates one independently revocable credential per device or client, displays a new token once, reports creation and last-use times, and retains revoked records for accountability. The browser API that backs this page is protected by the same Authentik owner session as Actions.
+
 Actions carry monotonically increasing revisions. MCP writers can submit the revision they last read; stale writes fail instead of silently overwriting newer browser or agent changes.
 
 ## Agent behavior

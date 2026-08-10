@@ -77,6 +77,7 @@ The development app implements the Actions workflow:
 - Tiptap is used as a headless, on-demand editor engine. Organization owns its appearance, persistence, uploads, and interaction surface.
 - Browser state is server-authoritative. Returning from sleep, focus loss, or connectivity loss revalidates the session and actions before continued use.
 - One application-owned Streamable HTTP MCP endpoint exposes narrow owner-scoped tools through revocable credentials and the same repository operations as the web API.
+- Account Settings owns user-facing integration management. MCP credentials are created, copied once, inspected, and revoked there; shell commands are operational recovery tools only.
 
 ## Explicitly deferred
 

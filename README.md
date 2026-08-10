@@ -14,6 +14,7 @@ The approved Actions experience is frozen as the application foundation. The rep
 - Track only completed actions in a GitHub-inspired yearly Activity heatmap.
 - Keep every action and attachment scoped to the authenticated owner.
 - Let trusted agents use the same owner-scoped operations through revocable MCP credentials.
+- Create and revoke per-client MCP credentials from the in-app Settings page.
 - Recover cleanly when a browser returns after sleep, disconnection, or an expired login.
 
 Product language and settled interaction rules live in [docs/product.md](./docs/product.md). The editor contract is documented in [docs/editor.md](./docs/editor.md).
@@ -71,7 +72,7 @@ docker run --rm \
 
 Open `http://127.0.0.1:3002`. The explicit development-auth override is only for a loopback-bound local container.
 
-The production image defaults to Authentik proxy authentication, listens on port `3000`, and stores all durable state beneath `/data`. It must be reachable only through the private Docker network behind Caddy; browser routes use Authentik forward auth and `/mcp` uses hashed, revocable credentials. Do not publish the container port directly. See [docs/deployment.md](./docs/deployment.md) and [docs/mcp.md](./docs/mcp.md).
+The production image defaults to Authentik proxy authentication, listens on port `3000`, and stores all durable state beneath `/data`. It must be reachable only through the private Docker network behind Caddy; browser routes use Authentik forward auth and `/mcp` uses hashed, revocable credentials managed from **Account → Settings → MCP**. Do not publish the container port directly. See [docs/deployment.md](./docs/deployment.md) and [docs/mcp.md](./docs/mcp.md).
 
 ## Automated image publishing
 

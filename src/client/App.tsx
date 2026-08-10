@@ -11,6 +11,7 @@ import {
   type FormEvent,
 } from "react";
 import * as api from "./api";
+import SettingsPage from "./SettingsPage";
 import {
   type ActionColor,
   type OrganizationAction,
@@ -239,8 +240,10 @@ function ActionComposer({
 
 function AccountControl({
   session,
+  onOpenSettings,
 }: {
   session: OrganizationSession;
+  onOpenSettings: () => void;
 }) {
   const { user } = session;
   return (
@@ -252,6 +255,16 @@ function AccountControl({
       <div className="account-popover">
         <strong>{user.displayName}</strong>
         <span>{user.email}</span>
+        <button
+          type="button"
+          onClick={(event) => {
+            const menu = event.currentTarget.closest("details");
+            if (menu) menu.open = false;
+            onOpenSettings();
+          }}
+        >
+          Settings
+        </button>
       </div>
     </details>
   );
@@ -455,6 +468,7 @@ export default function App() {
   const [session, setSession] = useState<OrganizationSession | null>(null);
   const [loading, setLoading] = useState(true);
   const [serverError, setServerError] = useState<string | null>(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [composerTarget, setComposerTarget] = useState<{ target: string; index?: number } | null>(null);
   const [activityYear, setActivityYear] = useState(() => new Date().getFullYear());
@@ -964,8 +978,16 @@ export default function App() {
           <button type="button" className={tab === "activity" ? "is-active" : ""} onClick={() => setTab("activity")}>Activity</button>
         </nav>
         <a className="brand" href="#top" aria-label="Organization home">organization</a>
-        <AccountControl session={session} />
+        <AccountControl session={session} onOpenSettings={() => setSettingsOpen(true)} />
       </header>
+
+      {settingsOpen && (
+        <SettingsPage
+          session={session}
+          onClose={() => setSettingsOpen(false)}
+          onError={handleApplicationError}
+        />
+      )}
 
       {serverError && (
         <div className="server-error" role="status">

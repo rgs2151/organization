@@ -52,15 +52,15 @@ The compiled client and migration directories are internal image paths. `ORGANIZ
 
 ## MCP credentials
 
-Credentials are generated inside the running container and shown once:
+Owners create, copy, inspect, and revoke credentials from **Account → Settings → MCP**. The raw token is returned to that authenticated browser exactly once. Only the SHA-256 token hash is stored. Each credential belongs to one Organization owner, has explicit read/write scopes, records last use, can be revoked independently, and writes a metadata-only audit record for each tool call. The raw credential must be stored on the MCP client and never committed to Git or placed in an MCP URL.
+
+The container command remains an emergency operator recovery interface, not the normal user flow:
 
 ```bash
 node dist/server/server/mcp-token.js create --email person@example.com --name "Mac Codex"
 node dist/server/server/mcp-token.js list --email person@example.com
 node dist/server/server/mcp-token.js revoke --email person@example.com --id <credential-id>
 ```
-
-Only the SHA-256 token hash is stored. Each credential belongs to one Organization owner, has explicit read/write scopes, records last use, can be revoked independently, and writes a metadata-only audit record for each tool call. The raw credential must be stored on the MCP client and never committed to Git or placed in an MCP URL.
 
 ## Image consumption
 

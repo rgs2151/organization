@@ -4,6 +4,8 @@ import type {
   MoveActionInput,
   OrganizationAction,
   OrganizationSession,
+  CreatedMcpToken,
+  McpTokenSummary,
   UpdateActionInput,
 } from "../shared/contracts";
 
@@ -116,4 +118,23 @@ export async function uploadActionImage(actionId: string, file: File) {
       body: file,
     },
   )).attachment;
+}
+
+export async function listMcpCredentials() {
+  return (await request<{ credentials: McpTokenSummary[] }>("/api/settings/mcp-credentials"))
+    .credentials;
+}
+
+export async function createMcpCredential(name: string) {
+  return request<CreatedMcpToken>("/api/settings/mcp-credentials", {
+    method: "POST",
+    body: JSON.stringify({ name }),
+  });
+}
+
+export async function revokeMcpCredential(id: string) {
+  return (await request<{ credential: McpTokenSummary }>(
+    `/api/settings/mcp-credentials/${encodeURIComponent(id)}`,
+    { method: "DELETE" },
+  )).credential;
 }

@@ -18,6 +18,14 @@ test("Organization MCP authenticates a revocable owner credential and uses appli
   const owner = { id: "mcp-owner", email: "mcp@example.com", displayName: "MCP Owner" };
   actions.ensureDevelopmentUser(owner);
   const createdCredential = credentials.create(owner.id, "Test client");
+  const otherOwner = actions.ensureAuthenticatedUser({
+    subject: "other-mcp-owner",
+    email: "other-mcp@example.com",
+    displayName: "Other MCP Owner",
+  });
+  const otherCredential = credentials.create(otherOwner.id, "Other client");
+  assert.deepEqual(credentials.list(owner.id).map((credential) => credential.name), ["Test client"]);
+  assert.throws(() => credentials.revoke(owner.id, otherCredential.credential.id));
 
   let mcp: ReturnType<typeof createOrganizationMcp> | null = null;
   const httpServer = createServer((request, response) => {

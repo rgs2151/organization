@@ -27,7 +27,7 @@ export class McpTokenRepository {
   constructor(private readonly database: DatabaseSync) {}
 
   create(ownerId: string, nameValue: string) {
-    const name = nameValue.trim();
+    const name = typeof nameValue === "string" ? nameValue.trim() : "";
     if (!name || name.length > 100) {
       throw new InputError("MCP credential names must be 1–100 characters.");
     }
