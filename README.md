@@ -9,6 +9,7 @@ The approved Actions experience is frozen as the application foundation. The rep
 - Capture undated work in a persistent **Someday** inbox.
 - Schedule and reorder actions across week and month calendars.
 - Drag-select actions and move an ordered group in one atomic operation.
+- Undo action creation, deletion, movement, completion, and color changes without consuming text-editor history.
 - Review a compact year of completion-volume circles.
 - Open an Action Page with date, color, completion, and structured notes.
 - Write headings, lists, checklists, quotes, code, and image attachments.

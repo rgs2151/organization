@@ -3,11 +3,13 @@ import type { DatabaseSync, StatementResultingChanges } from "node:sqlite";
 import {
   ACTION_COLORS,
   type CreateActionInput,
+  type ActionPlacement,
   type MoveActionInput,
   type MoveActionsInput,
   type OrganizationAction,
   type OrganizationUser,
   type RichTextDocument,
+  type RestoreActionStateInput,
   type UpdateActionInput,
 } from "../shared/contracts.js";
 import { DEVELOPMENT_ACTIONS } from "./development-seed.js";
@@ -117,7 +119,7 @@ export class ActionRepository {
     const rows = this.database.prepare(`
       SELECT id, revision, title, scheduled_for, note_document, completed, completed_at, color
       FROM actions
-      WHERE owner_id = ?
+      WHERE owner_id = ? AND deleted_at IS NULL
       ORDER BY scheduled_for IS NOT NULL, scheduled_for, position, created_at
     `).all(ownerId) as unknown as ActionRow[];
     return rows.map(toAction);
@@ -266,20 +268,115 @@ export class ActionRepository {
     return this.list(ownerId);
   }
 
+  restorePlacements(ownerId: string, placements: ActionPlacement[]): OrganizationAction[] {
+    if (!Array.isArray(placements)) throw new InputError("Choose actions to restore.");
+    const uniqueIds = new Set(placements.map((placement) => placement.id));
+    if (
+      placements.length === 0
+      || placements.length > 500
+      || uniqueIds.size !== placements.length
+      || placements.some((placement) => typeof placement.id !== "string" || !placement.id)
+    ) {
+      throw new InputError("Choose between 1 and 500 unique actions to restore.");
+    }
+
+    const normalized = placements.map((placement) => ({
+      id: placement.id,
+      date: validateDate(placement.date),
+      beforeId: placement.beforeId,
+    }));
+    const moving = normalized.map((placement) => this.getRequired(ownerId, placement.id));
+    const affectedDates = new Set<string | null>([
+      ...moving.map((action) => action.date),
+      ...normalized.map((placement) => placement.date),
+    ]);
+
+    this.transaction(() => {
+      const orderedByDate = new Map<string | null, string[]>();
+      affectedDates.forEach((date) => orderedByDate.set(date, this.idsForDate(ownerId, date)));
+      const movingIds = new Set(normalized.map((placement) => placement.id));
+      orderedByDate.forEach((ids, date) => {
+        orderedByDate.set(date, ids.filter((id) => !movingIds.has(id)));
+      });
+
+      for (const placement of [...normalized].reverse()) {
+        const orderedIds = orderedByDate.get(placement.date) ?? [];
+        const beforeIndex = placement.beforeId ? orderedIds.indexOf(placement.beforeId) : -1;
+        orderedIds.splice(beforeIndex >= 0 ? beforeIndex : orderedIds.length, 0, placement.id);
+        orderedByDate.set(placement.date, orderedIds);
+      }
+
+      const update = this.database.prepare(`
+        UPDATE actions
+        SET scheduled_for = ?, position = 0, revision = revision + 1, updated_at = CURRENT_TIMESTAMP
+        WHERE owner_id = ? AND id = ? AND deleted_at IS NULL
+      `);
+      normalized.forEach((placement) => update.run(placement.date, ownerId, placement.id));
+      orderedByDate.forEach((ids, date) => this.reindex(ownerId, date, ids));
+    });
+
+    return this.list(ownerId);
+  }
+
   delete(ownerId: string, id: string, expectedRevision?: number) {
     const current = this.getRequired(ownerId, id);
     requireRevision(current.revision, expectedRevision);
     const result = this.database.prepare(`
-      DELETE FROM actions
-      WHERE owner_id = ? AND id = ? AND (? IS NULL OR revision = ?)
+      UPDATE actions
+      SET deleted_at = CURRENT_TIMESTAMP, revision = revision + 1, updated_at = CURRENT_TIMESTAMP
+      WHERE owner_id = ? AND id = ? AND deleted_at IS NULL
+        AND (? IS NULL OR revision = ?)
     `).run(ownerId, id, expectedRevision ?? null, expectedRevision ?? null) as StatementResultingChanges;
     if (result.changes !== 1) throw new ConflictError("The action changed after it was read. Reload it and try again.");
+    this.reindex(ownerId, current.date, this.idsForDate(ownerId, current.date));
+  }
+
+  restore(ownerId: string, id: string, beforeId?: string) {
+    const row = this.database.prepare(`
+      SELECT id, scheduled_for
+      FROM actions
+      WHERE owner_id = ? AND id = ? AND deleted_at IS NOT NULL
+    `).get(ownerId, id) as { id: string; scheduled_for: string | null } | undefined;
+    if (!row) throw new NotFoundError("Deleted action not found.");
+
+    this.transaction(() => {
+      const orderedIds = this.idsForDate(ownerId, row.scheduled_for);
+      const beforeIndex = beforeId ? orderedIds.indexOf(beforeId) : -1;
+      orderedIds.splice(beforeIndex >= 0 ? beforeIndex : orderedIds.length, 0, id);
+      this.database.prepare(`
+        UPDATE actions
+        SET deleted_at = NULL, position = 0, revision = revision + 1, updated_at = CURRENT_TIMESTAMP
+        WHERE owner_id = ? AND id = ? AND deleted_at IS NOT NULL
+      `).run(ownerId, id);
+      this.reindex(ownerId, row.scheduled_for, orderedIds);
+    });
+
+    return this.list(ownerId);
+  }
+
+  restoreState(ownerId: string, id: string, state: RestoreActionStateInput) {
+    if (typeof state.completed !== "boolean") throw new InputError("Completion state is required.");
+    if (!ACTION_COLORS.includes(state.color)) throw new InputError("Unknown action color.");
+    if (state.completedAt !== null && !isValidTimestamp(state.completedAt)) {
+      throw new InputError("The completion time is invalid.");
+    }
+    if (!state.completed && state.completedAt !== null) {
+      throw new InputError("An incomplete action cannot have a completion time.");
+    }
+    this.getRequired(ownerId, id);
+    this.database.prepare(`
+      UPDATE actions
+      SET completed = ?, completed_at = ?, color = ?, revision = revision + 1,
+          updated_at = CURRENT_TIMESTAMP
+      WHERE owner_id = ? AND id = ? AND deleted_at IS NULL
+    `).run(state.completed ? 1 : 0, state.completedAt, state.color, ownerId, id);
+    return this.getRequired(ownerId, id);
   }
 
   private getRequired(ownerId: string, id: string) {
     const row = this.database.prepare(`
       SELECT id, revision, title, scheduled_for, note_document, completed, completed_at, color
-      FROM actions WHERE owner_id = ? AND id = ?
+      FROM actions WHERE owner_id = ? AND id = ? AND deleted_at IS NULL
     `).get(ownerId, id) as unknown as ActionRow | undefined;
     if (!row) throw new NotFoundError("Action not found.");
     return toAction(row);
@@ -288,7 +385,7 @@ export class ActionRepository {
   private idsForDate(ownerId: string, date: string | null) {
     const rows = this.database.prepare(`
       SELECT id FROM actions
-      WHERE owner_id = ? AND scheduled_for IS ?
+      WHERE owner_id = ? AND scheduled_for IS ? AND deleted_at IS NULL
       ORDER BY position, created_at
     `).all(ownerId, date);
     return rows.map((row) => String(row.id));
@@ -345,6 +442,10 @@ function validateDate(value: string | null) {
     throw new InputError("Dates must use YYYY-MM-DD format.");
   }
   return value;
+}
+
+function isValidTimestamp(value: string) {
+  return value.length <= 50 && !Number.isNaN(Date.parse(value));
 }
 
 function validateNote(value: RichTextDocument | undefined) {

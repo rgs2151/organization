@@ -60,6 +60,26 @@ export type MoveActionsInput = MoveActionInput & {
   ids: string[];
 };
 
+export type ActionPlacement = {
+  id: string;
+  date: string | null;
+  beforeId?: string;
+};
+
+export type RestoreActionPlacementsInput = {
+  placements: ActionPlacement[];
+};
+
+export type RestoreActionInput = {
+  beforeId?: string;
+};
+
+export type RestoreActionStateInput = {
+  completed: boolean;
+  completedAt: string | null;
+  color: ActionColor;
+};
+
 export type McpTokenSummary = {
   id: string;
   name: string;

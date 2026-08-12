@@ -96,8 +96,52 @@ test("actions remain owner-scoped and support the complete persistence lifecycle
     [created.id, firstBatchAction.id, secondBatchAction.id],
   );
 
+  const restoredPlacements = repository.restorePlacements(owner.id, [
+    { id: firstBatchAction.id, date: "2026-08-06" },
+    { id: secondBatchAction.id, date: null },
+  ]);
+  assert.equal(
+    restoredPlacements.filter((action) => action.date === "2026-08-06").at(-1)?.id,
+    firstBatchAction.id,
+  );
+  assert.equal(
+    restoredPlacements.filter((action) => action.date === null).at(-1)?.id,
+    secondBatchAction.id,
+  );
+
+  const firstOrdered = repository.create(owner.id, { title: "First ordered", date: "2026-09-01" });
+  const middleOrdered = repository.create(owner.id, { title: "Middle ordered", date: "2026-09-01" });
+  const lastOrdered = repository.create(owner.id, { title: "Last ordered", date: "2026-09-01" });
+  repository.moveMany(owner.id, {
+    ids: [firstOrdered.id, lastOrdered.id],
+    date: "2026-09-02",
+  });
+  const restoredNoncontiguous = repository.restorePlacements(owner.id, [
+    { id: firstOrdered.id, date: "2026-09-01", beforeId: middleOrdered.id },
+    { id: lastOrdered.id, date: "2026-09-01" },
+  ]);
+  assert.deepEqual(
+    restoredNoncontiguous.filter((action) => action.date === "2026-09-01").map((action) => action.id),
+    [firstOrdered.id, middleOrdered.id, lastOrdered.id],
+  );
+
+  const restoredState = repository.restoreState(owner.id, created.id, {
+    completed: true,
+    completedAt: "2026-08-05T18:30:00.000Z",
+    color: "rose",
+  });
+  assert.equal(restoredState.completedAt, "2026-08-05T18:30:00.000Z");
+  assert.equal(restoredState.color, "rose");
+
   repository.delete(owner.id, created.id);
   assert.equal(repository.list(owner.id).some((action) => action.id === created.id), false);
+  assert.equal(attachments.get(owner.id, "attachment-kept").filename, "kept.png");
+  const restoredDeleted = repository.restore(owner.id, created.id, "a-01");
+  assert.equal(restoredDeleted.find((action) => action.id === created.id)?.title, "Persist this action");
+  assert.equal(
+    restoredDeleted.filter((action) => action.date === "2026-08-05")[0]?.id,
+    created.id,
+  );
 });
 
 test("authenticated identities create empty accounts and safely claim a matching imported email", (context) => {

@@ -6,6 +6,9 @@ import type {
   CreateActionInput,
   MoveActionInput,
   MoveActionsInput,
+  RestoreActionInput,
+  RestoreActionPlacementsInput,
+  RestoreActionStateInput,
   RichTextNode,
   UpdateActionInput,
 } from "../shared/contracts.js";
@@ -65,7 +68,7 @@ async function route(request: IncomingMessage, response: ServerResponse) {
   }
 
   if (method === "GET" && url.pathname === "/api/health") {
-    sendJson(response, 200, { status: "ok", version: "0.6.0" });
+    sendJson(response, 200, { status: "ok", version: "0.7.0" });
     return;
   }
   if ((method === "GET" || method === "HEAD") && !isApiPath) {
@@ -110,6 +113,11 @@ async function route(request: IncomingMessage, response: ServerResponse) {
   if (method === "POST" && url.pathname === "/api/actions/move") {
     const input = await readJson<MoveActionsInput>(request);
     sendJson(response, 200, { actions: repository.moveMany(ownerId, input) });
+    return;
+  }
+  if (method === "POST" && url.pathname === "/api/actions/restore-placements") {
+    const input = await readJson<RestoreActionPlacementsInput>(request);
+    sendJson(response, 200, { actions: repository.restorePlacements(ownerId, input.placements) });
     return;
   }
 
@@ -183,12 +191,26 @@ async function route(request: IncomingMessage, response: ServerResponse) {
   }
   if (actionMatch && method === "DELETE") {
     const actionId = decodePathSegment(actionMatch[1]);
-    const storageKeys = attachments.storageKeysForAction(ownerId, actionId);
     repository.delete(ownerId, actionId);
-    await Promise.all(storageKeys.map((storageKey) =>
-      unlink(path.join(config.uploadDirectory, storageKey)).catch(() => undefined),
-    ));
     response.writeHead(204).end();
+    return;
+  }
+
+  const restoreMatch = url.pathname.match(/^\/api\/actions\/([^/]+)\/restore$/);
+  if (restoreMatch && method === "POST") {
+    const input = await readJson<RestoreActionInput>(request);
+    sendJson(response, 200, {
+      actions: repository.restore(ownerId, decodePathSegment(restoreMatch[1]), input.beforeId),
+    });
+    return;
+  }
+
+  const restoreStateMatch = url.pathname.match(/^\/api\/actions\/([^/]+)\/restore-state$/);
+  if (restoreStateMatch && method === "POST") {
+    const input = await readJson<RestoreActionStateInput>(request);
+    sendJson(response, 200, {
+      action: repository.restoreState(ownerId, decodePathSegment(restoreStateMatch[1]), input),
+    });
     return;
   }
 

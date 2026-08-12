@@ -3,6 +3,9 @@ import type {
   ActionAttachment,
   MoveActionInput,
   MoveActionsInput,
+  RestoreActionInput,
+  RestoreActionPlacementsInput,
+  RestoreActionStateInput,
   OrganizationAction,
   OrganizationSession,
   CreatedMcpToken,
@@ -112,6 +115,27 @@ export async function moveActions(input: MoveActionsInput) {
 
 export async function deleteAction(id: string) {
   await request<void>(`/api/actions/${encodeURIComponent(id)}`, { method: "DELETE" });
+}
+
+export async function restoreAction(id: string, input: RestoreActionInput = {}) {
+  return (await request<{ actions: OrganizationAction[] }>(
+    `/api/actions/${encodeURIComponent(id)}/restore`,
+    { method: "POST", body: JSON.stringify(input) },
+  )).actions;
+}
+
+export async function restoreActionPlacements(input: RestoreActionPlacementsInput) {
+  return (await request<{ actions: OrganizationAction[] }>("/api/actions/restore-placements", {
+    method: "POST",
+    body: JSON.stringify(input),
+  })).actions;
+}
+
+export async function restoreActionState(id: string, input: RestoreActionStateInput) {
+  return (await request<{ action: OrganizationAction }>(
+    `/api/actions/${encodeURIComponent(id)}/restore-state`,
+    { method: "POST", body: JSON.stringify(input) },
+  )).action;
 }
 
 export async function uploadActionImage(actionId: string, file: File) {

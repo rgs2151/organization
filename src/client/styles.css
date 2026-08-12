@@ -825,6 +825,11 @@ html.is-marquee-selecting * {
   box-shadow: 0 2px 5px rgba(30, 30, 25, 0.05);
 }
 
+.month-day .action-item.is-selected {
+  z-index: 2;
+  box-shadow: 0 0 0 2px #796cf0, 0 4px 12px rgba(84, 72, 185, 0.14);
+}
+
 .action-item.is-compact .action-open {
   align-items: flex-start;
   padding: 6px 2px 6px 6px;

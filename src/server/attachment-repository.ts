@@ -22,7 +22,7 @@ export class AttachmentRepository {
 
   requireOwnedAction(ownerId: string, actionId: string) {
     const row = this.database.prepare(
-      "SELECT 1 AS found FROM actions WHERE owner_id = ? AND id = ?",
+      "SELECT 1 AS found FROM actions WHERE owner_id = ? AND id = ? AND deleted_at IS NULL",
     ).get(ownerId, actionId);
     if (!row) throw new NotFoundError("Action not found.");
   }

@@ -15,6 +15,7 @@ import {
 import * as api from "./api";
 import SettingsPage from "./SettingsPage";
 import {
+  type ActionPlacement,
   type ActionColor,
   type OrganizationAction,
   type OrganizationSession,
@@ -40,6 +41,19 @@ type MarqueeBox = {
 };
 
 type CalendarAction = OrganizationAction;
+
+type UndoEntry =
+  | { kind: "create"; id: string }
+  | { kind: "delete"; id: string; beforeId?: string }
+  | { kind: "move"; placements: ActionPlacement[] }
+  | {
+      kind: "change";
+      id: string;
+      placement?: ActionPlacement;
+      state?: Pick<CalendarAction, "completed" | "completedAt" | "color">;
+    };
+
+const UNDO_HISTORY_LIMIT = 50;
 
 const ACTION_COLOR_VALUES: Record<ActionColor, string> = {
   plain: "rgba(255, 255, 255, 0.76)",
@@ -142,6 +156,12 @@ function actionIdsFromTransfer(event: DragEvent<HTMLElement>) {
   }
   const id = event.dataTransfer.getData("text/action-id");
   return id ? [id] : [];
+}
+
+function isTextEditingTarget(target: EventTarget | null) {
+  return target instanceof Element && Boolean(target.closest(
+    "input, textarea, [contenteditable='true'], [contenteditable='plaintext-only']",
+  ));
 }
 
 function activityLevel(count: number, completedDayCounts: number[]) {
@@ -511,6 +531,11 @@ export default function App() {
   const synchronization = useRef<Promise<boolean> | null>(null);
   const reconnecting = useRef(false);
   const marqueeCleanup = useRef<(() => void) | null>(null);
+  const actionsRef = useRef<CalendarAction[]>(actions);
+  const undoStack = useRef<UndoEntry[]>([]);
+  const undoing = useRef(false);
+  const patchRequests = useRef(new Map<string, Promise<void>>());
+  actionsRef.current = actions;
 
   useEffect(() => {
     let active = true;
@@ -546,10 +571,72 @@ export default function App() {
     };
   }, []);
 
+  useEffect(() => {
+    const handleUndoShortcut = (event: KeyboardEvent) => {
+      if (
+        event.key.toLowerCase() !== "z"
+        || (!event.metaKey && !event.ctrlKey)
+        || event.shiftKey
+        || event.altKey
+        || isTextEditingTarget(event.target)
+      ) return;
+      if (undoStack.current.length === 0 || undoing.current) return;
+      event.preventDefault();
+      void undoLastAction();
+    };
+    window.addEventListener("keydown", handleUndoShortcut);
+    return () => window.removeEventListener("keydown", handleUndoShortcut);
+  }, []);
+
   const selectedAction = actions.find((action) => action.id === selectedId) ?? null;
 
   function actionsFor(date: string | null) {
     return actions.filter((action) => action.date === date);
+  }
+
+  function pushUndo(entry: UndoEntry) {
+    undoStack.current = [...undoStack.current, entry].slice(-UNDO_HISTORY_LIMIT);
+  }
+
+  function placementFor(id: string, snapshot: CalendarAction[]): ActionPlacement | null {
+    const index = snapshot.findIndex((action) => action.id === id);
+    if (index < 0) return null;
+    const action = snapshot[index];
+    const next = snapshot.slice(index + 1).find((candidate) => candidate.date === action.date);
+    return { id, date: action.date, ...(next ? { beforeId: next.id } : {}) };
+  }
+
+  async function undoLastAction() {
+    const entry = undoStack.current.pop();
+    if (!entry || undoing.current) return;
+    undoing.current = true;
+    try {
+      if (entry.kind === "create") {
+        discardPendingPatch(entry.id);
+        await api.deleteAction(entry.id);
+        setActions((current) => current.filter((action) => action.id !== entry.id));
+      } else if (entry.kind === "delete") {
+        setActions(await api.restoreAction(entry.id, { beforeId: entry.beforeId }));
+      } else if (entry.kind === "move") {
+        setActions(await api.restoreActionPlacements({ placements: entry.placements }));
+      } else {
+        await flushPendingPatch(entry.id);
+        if (entry.placement) {
+          setActions(await api.restoreActionPlacements({ placements: [entry.placement] }));
+        }
+        if (entry.state) {
+          const restored = await api.restoreActionState(entry.id, entry.state);
+          setActions((current) => current.map((action) => action.id === entry.id ? restored : action));
+        }
+      }
+      setSelectedActionIds(new Set());
+      setServerError(null);
+    } catch (error) {
+      undoStack.current.push(entry);
+      if (!handleApplicationError(error)) void reloadApplication();
+    } finally {
+      undoing.current = false;
+    }
   }
 
   function beginMarqueeSelection(event: ReactPointerEvent<HTMLElement>) {
@@ -626,6 +713,7 @@ export default function App() {
     try {
       const newAction = await api.createAction({ title, date, beforeId });
       setActions((current) => insertAction(current, newAction, beforeId));
+      pushUndo({ kind: "create", id: newAction.id });
       setServerError(null);
     } catch (error) {
       handleApplicationError(error);
@@ -633,6 +721,27 @@ export default function App() {
   }
 
   function updateAction(id: string, patch: UpdateActionInput) {
+    const currentAction = actionsRef.current.find((action) => action.id === id);
+    const placement = Object.hasOwn(patch, "date")
+      ? placementFor(id, actionsRef.current) ?? undefined
+      : undefined;
+    const restoresState = Object.hasOwn(patch, "completed") || Object.hasOwn(patch, "color");
+    if (currentAction && (placement || restoresState)) {
+      pushUndo({
+        kind: "change",
+        id,
+        ...(placement ? { placement } : {}),
+        ...(restoresState
+          ? {
+              state: {
+                completed: currentAction.completed,
+                completedAt: currentAction.completedAt,
+                color: currentAction.color,
+              },
+            }
+          : {}),
+      });
+    }
     setActions((current) => current.map((action) => action.id === id
       ? {
           ...action,
@@ -646,22 +755,36 @@ export default function App() {
     pendingPatches.current.set(id, { ...pendingPatches.current.get(id), ...patch });
     const existingTimer = patchTimers.current.get(id);
     if (existingTimer) window.clearTimeout(existingTimer);
-    const timer = window.setTimeout(async () => {
-      const pending = pendingPatches.current.get(id);
-      pendingPatches.current.delete(id);
-      patchTimers.current.delete(id);
-      if (!pending) return;
-      try {
-        const saved = await api.updateAction(id, pending);
-        setActions((current) => current.map((action) => action.id === id
-          ? { ...action, completedAt: saved.completedAt }
-          : action));
-        setServerError(null);
-      } catch (error) {
-        if (!handleApplicationError(error)) void reloadApplication();
-      }
+    const timer = window.setTimeout(() => {
+      void flushPendingPatch(id).catch(() => undefined);
     }, 250);
     patchTimers.current.set(id, timer);
+  }
+
+  async function flushPendingPatch(id: string) {
+    const timer = patchTimers.current.get(id);
+    if (timer) window.clearTimeout(timer);
+    patchTimers.current.delete(id);
+
+    const previousRequest = patchRequests.current.get(id) ?? Promise.resolve();
+    const request = previousRequest.catch(() => undefined).then(async () => {
+      const pending = pendingPatches.current.get(id);
+      pendingPatches.current.delete(id);
+      if (!pending) return;
+      const saved = await api.updateAction(id, pending);
+      setActions((current) => current.map((action) => action.id === id ? saved : action));
+      setServerError(null);
+    });
+    patchRequests.current.set(id, request);
+    try {
+      await request;
+    } catch (error) {
+      undoStack.current = [];
+      if (!handleApplicationError(error)) void reloadApplication();
+      throw error;
+    } finally {
+      if (patchRequests.current.get(id) === request) patchRequests.current.delete(id);
+    }
   }
 
   function discardPendingPatch(id: string) {
@@ -811,6 +934,13 @@ export default function App() {
     const date = target === "someday" ? null : target;
     const orderedIds = actions.filter((action) => droppedIds.includes(action.id)).map((action) => action.id);
     if (orderedIds.length === 0) return;
+    const undoEntry: UndoEntry = {
+      kind: "move",
+      placements: orderedIds
+        .map((id) => placementFor(id, actionsRef.current))
+        .filter((placement): placement is ActionPlacement => placement !== null),
+    };
+    pushUndo(undoEntry);
     moveActionsLocally(orderedIds, date, beforeId);
     setDraggedIds([]);
     setDropTarget(null);
@@ -820,6 +950,7 @@ export default function App() {
         setServerError(null);
       })
       .catch((error: unknown) => {
+        undoStack.current = undoStack.current.filter((candidate) => candidate !== undoEntry);
         if (!handleApplicationError(error)) void reloadApplication();
       });
   }
@@ -1176,12 +1307,19 @@ export default function App() {
           onClose={() => setSelectedId(null)}
           onChange={(patch) => updateAction(selectedAction.id, patch)}
           onDelete={() => {
-            discardPendingPatch(selectedAction.id);
+            const placement = placementFor(selectedAction.id, actionsRef.current);
             setActions((current) => current.filter((action) => action.id !== selectedAction.id));
             setSelectedId(null);
-            void api.deleteAction(selectedAction.id).catch((error: unknown) => {
-              if (!handleApplicationError(error)) void reloadApplication();
-            });
+            void flushPendingPatch(selectedAction.id)
+              .then(() => api.deleteAction(selectedAction.id))
+              .then(() => pushUndo({
+                kind: "delete",
+                id: selectedAction.id,
+                ...(placement?.beforeId ? { beforeId: placement.beforeId } : {}),
+              }))
+              .catch((error: unknown) => {
+                if (!handleApplicationError(error)) void reloadApplication();
+              });
           }}
         />
       )}
