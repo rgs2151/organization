@@ -4,6 +4,7 @@ import {
   ACTION_COLORS,
   type CreateActionInput,
   type MoveActionInput,
+  type MoveActionsInput,
   type OrganizationAction,
   type OrganizationUser,
   type RichTextDocument,
@@ -226,6 +227,40 @@ export class ActionRepository {
       if (current.date !== date) {
         this.reindex(ownerId, current.date, this.idsForDate(ownerId, current.date));
       }
+    });
+
+    return this.list(ownerId);
+  }
+
+  moveMany(ownerId: string, input: MoveActionsInput): OrganizationAction[] {
+    const date = validateDate(input.date);
+    if (!Array.isArray(input.ids)) throw new InputError("Select actions to move.");
+    const ids = [...new Set(input.ids)];
+    if (ids.length === 0 || ids.length > 500 || ids.some((id) => typeof id !== "string" || !id)) {
+      throw new InputError("Select between 1 and 500 actions to move.");
+    }
+
+    const moving = ids.map((id) => this.getRequired(ownerId, id));
+    const movingIds = new Set(ids);
+    const sourceDates = new Set(moving.map((action) => action.date));
+
+    this.transaction(() => {
+      const targetIds = this.idsForDate(ownerId, date).filter((id) => !movingIds.has(id));
+      const requestedIndex = input.beforeId ? targetIds.indexOf(input.beforeId) : -1;
+      targetIds.splice(requestedIndex >= 0 ? requestedIndex : targetIds.length, 0, ...ids);
+
+      const update = this.database.prepare(`
+        UPDATE actions
+        SET scheduled_for = ?, position = 0, revision = revision + 1, updated_at = CURRENT_TIMESTAMP
+        WHERE owner_id = ? AND id = ?
+      `);
+      ids.forEach((id) => update.run(date, ownerId, id));
+      this.reindex(ownerId, date, targetIds);
+
+      sourceDates.delete(date);
+      sourceDates.forEach((sourceDate) => {
+        this.reindex(ownerId, sourceDate, this.idsForDate(ownerId, sourceDate));
+      });
     });
 
     return this.list(ownerId);

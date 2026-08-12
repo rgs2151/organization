@@ -9,6 +9,8 @@ import {
   type CSSProperties,
   type DragEvent,
   type FormEvent,
+  type MouseEvent as ReactMouseEvent,
+  type PointerEvent as ReactPointerEvent,
 } from "react";
 import * as api from "./api";
 import SettingsPage from "./SettingsPage";
@@ -28,6 +30,13 @@ type ActionLayout = "vertical" | "wrapped";
 type DropTarget = {
   target: string;
   beforeId?: string;
+};
+
+type MarqueeBox = {
+  left: number;
+  top: number;
+  width: number;
+  height: number;
 };
 
 type CalendarAction = OrganizationAction;
@@ -119,6 +128,22 @@ function prettyDate(key: string | null) {
   });
 }
 
+function actionIdsFromTransfer(event: DragEvent<HTMLElement>) {
+  const serialized = event.dataTransfer.getData("application/x-organization-action-ids");
+  if (serialized) {
+    try {
+      const ids = JSON.parse(serialized) as unknown;
+      if (Array.isArray(ids) && ids.every((id) => typeof id === "string" && id)) {
+        return [...new Set(ids)];
+      }
+    } catch {
+      // Fall through to the single-action payload used by older clients.
+    }
+  }
+  const id = event.dataTransfer.getData("text/action-id");
+  return id ? [id] : [];
+}
+
 function activityLevel(count: number, completedDayCounts: number[]) {
   if (count === 0 || completedDayCounts.length === 0) return 0;
   let daysAtOrBelow = 0;
@@ -134,6 +159,7 @@ function ActionItem({
   compact = false,
   bucket = false,
   isDragging = false,
+  isSelected = false,
   dropBefore = false,
   dropAfter = false,
   onOpen,
@@ -147,14 +173,15 @@ function ActionItem({
   compact?: boolean;
   bucket?: boolean;
   isDragging?: boolean;
+  isSelected?: boolean;
   dropBefore?: boolean;
   dropAfter?: boolean;
-  onOpen: () => void;
+  onOpen: (event: ReactMouseEvent<HTMLButtonElement>) => void;
   onComplete: () => void;
-  onDragStart: (event: DragEvent<HTMLDivElement>) => void;
+  onDragStart: (event: DragEvent<HTMLDivElement>) => string[];
   onDragEnd: () => void;
   onDragPosition: (event: DragEvent<HTMLDivElement>) => void;
-  onDropAt: (event: DragEvent<HTMLDivElement>, draggedId: string) => void;
+  onDropAt: (event: DragEvent<HTMLDivElement>, draggedIds: string[]) => void;
 }) {
   const style = {
     "--action-color": ACTION_COLOR_VALUES[action.color],
@@ -162,13 +189,15 @@ function ActionItem({
 
   return (
     <div
-      className={`action-item ${compact ? "is-compact" : ""} ${bucket ? "is-bucket" : ""} ${isDragging ? "is-dragging" : ""} ${dropBefore ? "is-drop-before" : ""} ${dropAfter ? "is-drop-after" : ""} ${action.completed ? "is-complete" : ""}`}
+      className={`action-item ${compact ? "is-compact" : ""} ${bucket ? "is-bucket" : ""} ${isDragging ? "is-dragging" : ""} ${isSelected ? "is-selected" : ""} ${dropBefore ? "is-drop-before" : ""} ${dropAfter ? "is-drop-after" : ""} ${action.completed ? "is-complete" : ""}`}
       data-action-id={action.id}
+      aria-selected={isSelected}
       draggable
       onDragStart={(event) => {
+        const actionIds = onDragStart(event);
         event.dataTransfer.effectAllowed = "move";
         event.dataTransfer.setData("text/action-id", action.id);
-        onDragStart(event);
+        event.dataTransfer.setData("application/x-organization-action-ids", JSON.stringify(actionIds));
       }}
       onDragOver={(event) => {
         event.preventDefault();
@@ -179,8 +208,8 @@ function ActionItem({
       onDrop={(event) => {
         event.preventDefault();
         event.stopPropagation();
-        const draggedId = event.dataTransfer.getData("text/action-id");
-        if (draggedId && draggedId !== action.id) onDropAt(event, draggedId);
+        const actionIds = actionIdsFromTransfer(event);
+        if (actionIds.length > 0 && !actionIds.includes(action.id)) onDropAt(event, actionIds);
       }}
       onDragEnd={onDragEnd}
       style={style}
@@ -472,13 +501,16 @@ export default function App() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [composerTarget, setComposerTarget] = useState<{ target: string; index?: number } | null>(null);
   const [activityYear, setActivityYear] = useState(() => new Date().getFullYear());
-  const [draggedId, setDraggedId] = useState<string | null>(null);
+  const [selectedActionIds, setSelectedActionIds] = useState<Set<string>>(() => new Set());
+  const [draggedIds, setDraggedIds] = useState<string[]>([]);
   const [dropTarget, setDropTarget] = useState<DropTarget | null>(null);
+  const [marqueeBox, setMarqueeBox] = useState<MarqueeBox | null>(null);
   const pendingPatches = useRef(new Map<string, UpdateActionInput>());
   const patchTimers = useRef(new Map<string, number>());
   const lastSuccessfulSync = useRef(0);
   const synchronization = useRef<Promise<boolean> | null>(null);
   const reconnecting = useRef(false);
+  const marqueeCleanup = useRef<(() => void) | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -504,6 +536,7 @@ export default function App() {
 
     return () => {
       active = false;
+      marqueeCleanup.current?.();
       patchTimers.current.forEach((timer) => window.clearTimeout(timer));
       window.removeEventListener(api.AUTHENTICATION_REQUIRED_EVENT, reconnect);
       window.removeEventListener("focus", synchronizeAfterResume);
@@ -517,6 +550,72 @@ export default function App() {
 
   function actionsFor(date: string | null) {
     return actions.filter((action) => action.date === date);
+  }
+
+  function beginMarqueeSelection(event: ReactPointerEvent<HTMLElement>) {
+    if (event.button !== 0 || event.pointerType !== "mouse") return;
+    const target = event.target as HTMLElement;
+    if (!target.closest(".selection-surface")) return;
+    if (target.closest(".action-item, .action-composer, button, input, textarea, a")) return;
+
+    marqueeCleanup.current?.();
+    const startX = event.clientX;
+    const startY = event.clientY;
+    const additive = event.metaKey || event.ctrlKey;
+    const baseSelection = additive ? new Set(selectedActionIds) : new Set<string>();
+    let active = false;
+
+    const cleanup = () => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", finish);
+      window.removeEventListener("pointercancel", finish);
+      document.documentElement.classList.remove("is-marquee-selecting");
+      setMarqueeBox(null);
+      marqueeCleanup.current = null;
+    };
+
+    const move = (pointerEvent: PointerEvent) => {
+      const distance = Math.hypot(pointerEvent.clientX - startX, pointerEvent.clientY - startY);
+      if (!active && distance < 5) return;
+      active = true;
+      pointerEvent.preventDefault();
+      document.documentElement.classList.add("is-marquee-selecting");
+
+      const left = Math.min(startX, pointerEvent.clientX);
+      const top = Math.min(startY, pointerEvent.clientY);
+      const right = Math.max(startX, pointerEvent.clientX);
+      const bottom = Math.max(startY, pointerEvent.clientY);
+      setMarqueeBox({ left, top, width: right - left, height: bottom - top });
+
+      const nextSelection = new Set(baseSelection);
+      document.querySelectorAll<HTMLElement>(".action-item[data-action-id]").forEach((element) => {
+        const bounds = element.getBoundingClientRect();
+        if (bounds.right >= left && bounds.left <= right && bounds.bottom >= top && bounds.top <= bottom) {
+          const id = element.dataset.actionId;
+          if (id) nextSelection.add(id);
+        }
+      });
+      setSelectedActionIds(nextSelection);
+    };
+
+    const finish = () => {
+      if (!active && !additive) setSelectedActionIds(new Set());
+      cleanup();
+    };
+
+    marqueeCleanup.current = cleanup;
+    window.addEventListener("pointermove", move, { passive: false });
+    window.addEventListener("pointerup", finish, { once: true });
+    window.addEventListener("pointercancel", finish, { once: true });
+  }
+
+  function toggleActionSelection(id: string) {
+    setSelectedActionIds((current) => {
+      const next = new Set(current);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
   }
 
   async function addAction(target: string, title: string, insertIndex?: number) {
@@ -572,26 +671,29 @@ export default function App() {
     pendingPatches.current.delete(id);
   }
 
-  function moveActionLocally(draggedId: string, targetDate: string | null, beforeId?: string) {
+  function moveActionsLocally(actionIds: string[], targetDate: string | null, beforeId?: string) {
     setActions((current) => {
-      const moving = current.find((action) => action.id === draggedId);
-      if (!moving) return current;
-      const remaining = current.filter((action) => action.id !== draggedId);
-      const moved = { ...moving, date: targetDate };
+      const idSet = new Set(actionIds);
+      const moving = actionIds
+        .map((id) => current.find((action) => action.id === id))
+        .filter((action): action is CalendarAction => Boolean(action))
+        .map((action) => ({ ...action, date: targetDate }));
+      if (moving.length === 0) return current;
+      const remaining = current.filter((action) => !idSet.has(action.id));
       if (beforeId) {
         const beforeIndex = remaining.findIndex((action) => action.id === beforeId);
         if (beforeIndex >= 0) {
-          return [...remaining.slice(0, beforeIndex), moved, ...remaining.slice(beforeIndex)];
+          return [...remaining.slice(0, beforeIndex), ...moving, ...remaining.slice(beforeIndex)];
         }
       }
       const lastTargetIndex = remaining.reduce(
         (last, action, index) => action.date === targetDate ? index : last,
         -1,
       );
-      if (lastTargetIndex < 0) return [...remaining, moved];
+      if (lastTargetIndex < 0) return [...remaining, ...moving];
       return [
         ...remaining.slice(0, lastTargetIndex + 1),
-        moved,
+        ...moving,
         ...remaining.slice(lastTargetIndex + 1),
       ];
     });
@@ -640,7 +742,8 @@ export default function App() {
     targetActions: CalendarAction[],
     layout: ActionLayout,
   ) {
-    const orderedActions = targetActions.filter((candidate) => candidate.id !== draggedId);
+    const movingIds = new Set(draggedIds);
+    const orderedActions = targetActions.filter((candidate) => !movingIds.has(candidate.id));
     const hoveredIndex = orderedActions.findIndex((candidate) => candidate.id === action.id);
     if (hoveredIndex < 0) return undefined;
 
@@ -658,7 +761,8 @@ export default function App() {
     layout: ActionLayout,
   ) {
     const container = event.currentTarget;
-    const orderedActions = targetActions.filter((candidate) => candidate.id !== draggedId);
+    const movingIds = new Set(draggedIds);
+    const orderedActions = targetActions.filter((candidate) => !movingIds.has(candidate.id));
 
     for (const action of orderedActions) {
       const element = container.querySelector<HTMLElement>(`[data-action-id="${action.id}"]`);
@@ -686,7 +790,7 @@ export default function App() {
     layout: ActionLayout,
   ) {
     event.preventDefault();
-    if (!draggedId) return;
+    if (draggedIds.length === 0) return;
     setDropTarget({ target, beforeId: beforeIdInContainer(event, targetActions, layout) });
   }
 
@@ -697,16 +801,20 @@ export default function App() {
     layout: ActionLayout,
   ) {
     event.preventDefault();
-    const droppedId = event.dataTransfer.getData("text/action-id");
-    if (droppedId) completeDrop(droppedId, target, beforeIdInContainer(event, targetActions, layout));
+    const droppedIds = actionIdsFromTransfer(event);
+    if (droppedIds.length > 0) {
+      completeDrop(droppedIds, target, beforeIdInContainer(event, targetActions, layout));
+    }
   }
 
-  function completeDrop(droppedId: string, target: string, beforeId?: string) {
+  function completeDrop(droppedIds: string[], target: string, beforeId?: string) {
     const date = target === "someday" ? null : target;
-    moveActionLocally(droppedId, date, beforeId);
-    setDraggedId(null);
+    const orderedIds = actions.filter((action) => droppedIds.includes(action.id)).map((action) => action.id);
+    if (orderedIds.length === 0) return;
+    moveActionsLocally(orderedIds, date, beforeId);
+    setDraggedIds([]);
     setDropTarget(null);
-    void api.moveAction(droppedId, { date, beforeId })
+    void api.moveActions({ ids: orderedIds, date, beforeId })
       .then((savedActions) => {
         setActions(savedActions);
         setServerError(null);
@@ -724,43 +832,58 @@ export default function App() {
     compact = false,
     bucket = false,
   ) {
-    const remainingTargetActions = targetActions.filter((candidate) => candidate.id !== draggedId);
-    const isActiveTarget = Boolean(draggedId && dropTarget?.target === target);
+    const movingIds = new Set(draggedIds);
+    const remainingTargetActions = targetActions.filter((candidate) => !movingIds.has(candidate.id));
+    const isActiveTarget = Boolean(draggedIds.length > 0 && dropTarget?.target === target);
     const lastTargetId = remainingTargetActions[remainingTargetActions.length - 1]?.id;
 
     return {
       action,
       compact,
       bucket,
-      isDragging: draggedId === action.id,
+      isDragging: movingIds.has(action.id),
+      isSelected: selectedActionIds.has(action.id),
       dropBefore: isActiveTarget && dropTarget?.beforeId === action.id,
       dropAfter: isActiveTarget && dropTarget?.beforeId === undefined && lastTargetId === action.id,
-      onOpen: () => setSelectedId(action.id),
+      onOpen: (event: ReactMouseEvent<HTMLButtonElement>) => {
+        if (event.metaKey || event.ctrlKey || event.shiftKey) {
+          toggleActionSelection(action.id);
+          return;
+        }
+        setSelectedActionIds(new Set());
+        setSelectedId(action.id);
+      },
       onComplete: () => updateAction(action.id, { completed: !action.completed }),
       onDragStart: () => {
-        setDraggedId(action.id);
+        const ids = selectedActionIds.has(action.id)
+          ? actions.filter((candidate) => selectedActionIds.has(candidate.id)).map((candidate) => candidate.id)
+          : [action.id];
+        setSelectedActionIds(new Set(ids));
+        setDraggedIds(ids);
         setDropTarget(null);
+        return ids;
       },
       onDragEnd: () => {
-        setDraggedId(null);
+        setDraggedIds([]);
         setDropTarget(null);
       },
       onDragPosition: (event: DragEvent<HTMLDivElement>) => {
-        if (!draggedId || draggedId === action.id) return;
+        if (draggedIds.length === 0 || movingIds.has(action.id)) return;
         setDropTarget({
           target,
           beforeId: beforeIdAtPointer(event, action, targetActions, layout),
         });
       },
-      onDropAt: (event: DragEvent<HTMLDivElement>, droppedId: string) => {
-        completeDrop(droppedId, target, beforeIdAtPointer(event, action, targetActions, layout));
+      onDropAt: (event: DragEvent<HTMLDivElement>, droppedActionIds: string[]) => {
+        completeDrop(droppedActionIds, target, beforeIdAtPointer(event, action, targetActions, layout));
       },
     };
   }
 
   function dropListClass(target: string, targetActions: CalendarAction[]) {
-    const hasDropTarget = draggedId && dropTarget?.target === target;
-    const hasRemainingActions = targetActions.some((action) => action.id !== draggedId);
+    const movingIds = new Set(draggedIds);
+    const hasDropTarget = draggedIds.length > 0 && dropTarget?.target === target;
+    const hasRemainingActions = targetActions.some((action) => !movingIds.has(action.id));
     return hasDropTarget && !hasRemainingActions ? "is-drop-empty" : "";
   }
 
@@ -788,7 +911,7 @@ export default function App() {
           </button>
         </div>
         <div
-          className={`someday-grid ${dropListClass("someday", somedayActions)}`}
+          className={`someday-grid selection-surface ${dropListClass("someday", somedayActions)}`}
           onDragOver={(event) => previewContainerDrop(event, "someday", somedayActions, "wrapped")}
           onDrop={(event) => completeContainerDrop(event, "someday", somedayActions, "wrapped")}
           onDoubleClick={(event) => {
@@ -832,7 +955,7 @@ export default function App() {
                     <span>{WEEKDAYS[(day.getDay() + 6) % 7]}</span>
                   </header>
                   <div
-                    className={`day-actions ${dropListClass(key, dayActions)}`}
+                    className={`day-actions selection-surface ${dropListClass(key, dayActions)}`}
                     onDragOver={(event) => previewContainerDrop(event, key, dayActions, "vertical")}
                     onDrop={(event) => completeContainerDrop(event, key, dayActions, "vertical")}
                     onDoubleClick={(event) => {
@@ -889,7 +1012,7 @@ export default function App() {
                     <span>{day.getDate()}</span>
                   </header>
                   <div
-                    className={`month-actions ${dropListClass(key, dayActions)}`}
+                    className={`month-actions selection-surface ${dropListClass(key, dayActions)}`}
                     onDragOver={(event) => previewContainerDrop(event, key, dayActions, "vertical")}
                     onDrop={(event) => completeContainerDrop(event, key, dayActions, "vertical")}
                   >
@@ -909,6 +1032,15 @@ export default function App() {
 
   function renderYear() {
     const year = focusDate.getFullYear();
+    const completedByDate = new Map<string, number>();
+    actions.forEach((action) => {
+      const completedDate = action.completedAt?.slice(0, 10);
+      if (action.completed && completedDate?.startsWith(`${year}-`)) {
+        completedByDate.set(completedDate, (completedByDate.get(completedDate) ?? 0) + 1);
+      }
+    });
+    const maximumCompleted = Math.max(1, ...completedByDate.values());
+
     return (
       <section className="year-view" aria-label="Year view">
         {MONTHS.map((monthName, month) => {
@@ -929,20 +1061,26 @@ export default function App() {
               <div className="mini-days">
                 {days.map((day) => {
                   const key = toDateKey(day);
-                  const dayActions = actionsFor(key);
+                  const isOutside = day.getMonth() !== month;
+                  const completedCount = isOutside ? 0 : completedByDate.get(key) ?? 0;
+                  const completionSize = completedCount === 0
+                    ? 0
+                    : 4 + Math.sqrt(completedCount / maximumCompleted) * 10;
                   return (
                     <button
                       key={key}
                       type="button"
-                      className={`${day.getMonth() !== month ? "is-outside" : ""} ${dayActions.length ? "has-actions" : ""}`}
-                      title={dayActions.length ? `${dayActions.length} actions on ${prettyDate(key)}` : prettyDate(key)}
+                      className={`${isOutside ? "is-outside" : ""} ${completedCount ? "has-completions" : ""}`}
+                      style={{ "--completion-size": `${completionSize}px` } as CSSProperties}
+                      title={`${completedCount} completed ${completedCount === 1 ? "action" : "actions"} on ${prettyDate(key)}`}
+                      aria-label={`${prettyDate(key)}: ${completedCount} completed ${completedCount === 1 ? "action" : "actions"}`}
+                      disabled={isOutside}
                       onClick={() => {
                         setFocusDate(day);
                         setView("week");
                       }}
                     >
-                      {day.getDate()}
-                      {dayActions.length > 0 && <i aria-hidden="true" />}
+                      {completedCount > 0 && <i aria-hidden="true" />}
                     </button>
                   );
                 })}
@@ -970,7 +1108,7 @@ export default function App() {
   }
 
   return (
-    <main className="app-shell">
+    <main className="app-shell" onPointerDown={beginMarqueeSelection}>
       <header className="topbar" id="top">
         <nav className="primary-tabs" aria-label="Product sections">
           <button type="button" className={tab === "actions" ? "is-active" : ""} onClick={() => setTab("actions")}>Actions</button>
@@ -1044,6 +1182,19 @@ export default function App() {
             void api.deleteAction(selectedAction.id).catch((error: unknown) => {
               if (!handleApplicationError(error)) void reloadApplication();
             });
+          }}
+        />
+      )}
+
+      {marqueeBox && (
+        <div
+          className="selection-marquee"
+          aria-hidden="true"
+          style={{
+            left: marqueeBox.left,
+            top: marqueeBox.top,
+            width: marqueeBox.width,
+            height: marqueeBox.height,
           }}
         />
       )}

@@ -78,6 +78,24 @@ test("actions remain owner-scoped and support the complete persistence lifecycle
     created.id,
   );
 
+  const firstBatchAction = repository.create(owner.id, {
+    title: "Move this first",
+    date: "2026-08-06",
+  });
+  const secondBatchAction = repository.create(owner.id, {
+    title: "Move this second",
+    date: null,
+  });
+  const batchMoved = repository.moveMany(owner.id, {
+    ids: [firstBatchAction.id, secondBatchAction.id],
+    date: "2026-08-05",
+    beforeId: "a-01",
+  });
+  assert.deepEqual(
+    batchMoved.filter((action) => action.date === "2026-08-05").slice(0, 3).map((action) => action.id),
+    [created.id, firstBatchAction.id, secondBatchAction.id],
+  );
+
   repository.delete(owner.id, created.id);
   assert.equal(repository.list(owner.id).some((action) => action.id === created.id), false);
 });

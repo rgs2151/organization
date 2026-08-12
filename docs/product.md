@@ -36,6 +36,7 @@ The development app implements the Actions workflow:
 - completion strike-through and visual feedback;
 - drag-and-drop reordering within a day;
 - drag-and-drop scheduling across days and between `someday` and the calendar;
+- marquee selection and ordered multi-action dragging as one atomic move;
 - quick action creation;
 - a deliberately small Action Page;
 - a compact structured-note editor shared with the future Journal surface;
@@ -55,10 +56,13 @@ The development app implements the Actions workflow:
 - `Someday` is a persistent heading above a subtle, full-width inbox, leaving open space for direct creation and drop targets. Its heading control creates an undated action without removing the double-click shortcut.
 - Week columns grow with their actions rather than using a fixed viewport height. Scheduled actions have one consistent two-line height and truncate longer titles until their Action Page is opened.
 - Dragging an action draws a stable animated insertion marker at its exact destination without reflowing the list under the pointer.
+- Dragging across open calendar space selects every intersected action. Dragging any selected action moves the selected set as one ordered block and persists it atomically.
 - Actions do not reveal a hover handle or shift their text. The entire action remains directly draggable without hover chrome.
 - New-action composers use the same inline input and icon-submit treatment across Someday, week, and month contexts, with size adjustments only for compact calendar cells.
 - The Action Page reserves most of its area for writing. Metadata and formatting controls remain compact and directly accessible.
 - The month view always shows every action. A calendar week grows to fit the busiest day in that row; actions are never collapsed behind a `+ more` counter.
+- Empty month days remain full-height creation and drop targets.
+- The compact year view uses completion circles rather than presence markers. Circle area scales with the number of actions actually completed on that date.
 - The completion control remains on the right edge of an action and completion strikes through the title.
 - `Someday` remains the undated staging area and accepts actions dragged out of the calendar.
 - Activity counts each checked action on the UTC date when it was completed. Its four green intensity bands divide nonempty days into GitHub-style completion-count quartiles; tied counts share a band and the busiest days use the darkest color.

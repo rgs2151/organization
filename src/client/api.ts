@@ -2,6 +2,7 @@ import type {
   CreateActionInput,
   ActionAttachment,
   MoveActionInput,
+  MoveActionsInput,
   OrganizationAction,
   OrganizationSession,
   CreatedMcpToken,
@@ -97,6 +98,13 @@ export async function updateAction(id: string, input: UpdateActionInput) {
 
 export async function moveAction(id: string, input: MoveActionInput) {
   return (await request<{ actions: OrganizationAction[] }>(`/api/actions/${encodeURIComponent(id)}/move`, {
+    method: "POST",
+    body: JSON.stringify(input),
+  })).actions;
+}
+
+export async function moveActions(input: MoveActionsInput) {
+  return (await request<{ actions: OrganizationAction[] }>("/api/actions/move", {
     method: "POST",
     body: JSON.stringify(input),
   })).actions;

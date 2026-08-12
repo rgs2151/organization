@@ -82,7 +82,7 @@ function organizationMcpServer(
   principal: McpPrincipal,
 ) {
   const server = new McpServer(
-    { name: "organization", version: "0.5.0" },
+    { name: "organization", version: "0.6.0" },
     {
       instructions: "Organization is the user's unified personal system. Read current context before making broad scheduling changes. Explicit requests such as scheduling one stated action may be applied directly; preview broad reorganizations first. Preserve the user's words in notes, label interpretations as hypotheses, and never claim an MCP write succeeded unless the tool returned success. Revisions prevent stale overwrites. Destructive deletion requires explicit user intent.",
     },

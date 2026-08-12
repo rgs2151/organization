@@ -448,6 +448,25 @@ textarea:focus-visible {
   transform: scale(0.97);
 }
 
+.action-item.is-selected {
+  z-index: 2;
+  box-shadow: 0 0 0 2px #796cf0, 0 4px 12px rgba(84, 72, 185, 0.14);
+}
+
+.selection-marquee {
+  position: fixed;
+  z-index: 90;
+  border: 1px solid rgba(102, 90, 240, 0.8);
+  background: rgba(203, 198, 255, 0.28);
+  pointer-events: none;
+}
+
+html.is-marquee-selecting,
+html.is-marquee-selecting * {
+  cursor: crosshair !important;
+  user-select: none !important;
+}
+
 .action-item.is-drop-before::before,
 .action-item.is-drop-after::after {
   position: absolute;
@@ -743,8 +762,10 @@ textarea:focus-visible {
 }
 
 .month-day {
+  display: flex;
   min-width: 0;
   min-height: 160px;
+  flex-direction: column;
   border-right: 1px solid #deded8;
   border-bottom: 1px solid #deded8;
   padding: 7px;
@@ -789,6 +810,9 @@ textarea:focus-visible {
 
 .month-actions {
   display: grid;
+  min-height: 108px;
+  flex: 1;
+  align-content: start;
   gap: 4px;
 }
 
@@ -850,21 +874,15 @@ textarea:focus-visible {
 
 .year-view {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 20px;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 12px;
 }
 
 .mini-month {
   border: 1px solid #deded8;
-  border-radius: 12px;
-  padding: 15px;
+  border-radius: 10px;
+  padding: 10px;
   background: rgba(255, 255, 255, 0.6);
-  transition: transform 180ms ease, box-shadow 180ms ease;
-}
-
-.mini-month:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 12px 22px rgba(35, 35, 30, 0.06);
 }
 
 .mini-month-title {
@@ -873,9 +891,9 @@ textarea:focus-visible {
   align-items: baseline;
   justify-content: space-between;
   border: 0;
-  padding: 0 2px 13px;
+  padding: 0 2px 8px;
   background: transparent;
-  font-size: 16px;
+  font-size: 13px;
   font-weight: 780;
   letter-spacing: -0.03em;
   text-align: left;
@@ -888,7 +906,7 @@ textarea:focus-visible {
 }
 
 .mini-weekdays span {
-  padding-bottom: 6px;
+  padding-bottom: 4px;
   color: #a3a39d;
   font-size: 8px;
   font-weight: 700;
@@ -897,11 +915,12 @@ textarea:focus-visible {
 
 .mini-days button {
   position: relative;
-  aspect-ratio: 1.35;
+  display: grid;
+  aspect-ratio: 1;
+  place-items: center;
   border: 0;
-  border-radius: 5px;
+  border-radius: 4px;
   background: transparent;
-  font-size: 9px;
 }
 
 .mini-days button:hover {
@@ -909,21 +928,21 @@ textarea:focus-visible {
 }
 
 .mini-days button.is-outside {
-  color: #d1d1cc;
-}
-
-.mini-days button.has-actions {
-  font-weight: 800;
+  visibility: hidden;
 }
 
 .mini-days button i {
-  position: absolute;
-  right: 4px;
-  bottom: 2px;
-  width: 4px;
-  height: 4px;
+  width: var(--completion-size);
+  height: var(--completion-size);
   border-radius: 50%;
-  background: #665af0;
+  background: #36aa70;
+  box-shadow: 0 0 0 1px rgba(21, 112, 67, 0.08);
+  transition: transform 140ms ease, background 140ms ease;
+}
+
+.mini-days button.has-completions:hover i {
+  transform: scale(1.18);
+  background: #268b5b;
 }
 
 .activity-section {

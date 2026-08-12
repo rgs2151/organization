@@ -8,7 +8,8 @@ The approved Actions experience is frozen as the application foundation. The rep
 
 - Capture undated work in a persistent **Someday** inbox.
 - Schedule and reorder actions across week and month calendars.
-- Navigate the year without losing the compact planning model.
+- Drag-select actions and move an ordered group in one atomic operation.
+- Review a compact year of completion-volume circles.
 - Open an Action Page with date, color, completion, and structured notes.
 - Write headings, lists, checklists, quotes, code, and image attachments.
 - Track only completed actions in a GitHub-inspired yearly Activity heatmap.

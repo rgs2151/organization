@@ -56,6 +56,10 @@ export type MoveActionInput = {
   beforeId?: string;
 };
 
+export type MoveActionsInput = MoveActionInput & {
+  ids: string[];
+};
+
 export type McpTokenSummary = {
   id: string;
   name: string;

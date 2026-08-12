@@ -5,6 +5,7 @@ import path from "node:path";
 import type {
   CreateActionInput,
   MoveActionInput,
+  MoveActionsInput,
   RichTextNode,
   UpdateActionInput,
 } from "../shared/contracts.js";
@@ -64,7 +65,7 @@ async function route(request: IncomingMessage, response: ServerResponse) {
   }
 
   if (method === "GET" && url.pathname === "/api/health") {
-    sendJson(response, 200, { status: "ok", version: "0.5.0" });
+    sendJson(response, 200, { status: "ok", version: "0.6.0" });
     return;
   }
   if ((method === "GET" || method === "HEAD") && !isApiPath) {
@@ -104,6 +105,11 @@ async function route(request: IncomingMessage, response: ServerResponse) {
   if (method === "POST" && url.pathname === "/api/actions") {
     const input = await readJson<CreateActionInput>(request);
     sendJson(response, 201, { action: repository.create(ownerId, input) });
+    return;
+  }
+  if (method === "POST" && url.pathname === "/api/actions/move") {
+    const input = await readJson<MoveActionsInput>(request);
+    sendJson(response, 200, { actions: repository.moveMany(ownerId, input) });
     return;
   }
 
