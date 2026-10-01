@@ -4,6 +4,7 @@ Organization exposes one unified, application-owned MCP endpoint at `https://org
 
 ## Current tools
 
+- `organization_get_profile`: stable identity represented by the authenticated connection.
 - `organization_get_context`: scheduled, Someday, and recently completed context around a date.
 - `actions_list` and `actions_get`: bounded owner-scoped reads.
 - `actions_create`, `actions_update`, and `actions_move`: normal application writes and ordering.
@@ -15,9 +16,16 @@ Journal, goals, reflection sessions, and future modules belong on this same endp
 
 ## Authorization and containment
 
-Every client receives its own revocable bearer credential. Organization stores only a token hash, resolves every call to one owner, enforces read/write scopes, and records tool name, result, target identifier, token, and time without logging titles or note contents. The route never accepts Internet-supplied Authentik identity headers.
+Organization supports two credential classes:
+
+- Personal MCP clients receive independently revocable `orgmcp_…` credentials. Only their SHA-256 hashes are stored.
+- Interactive hosts such as ChatGPT authenticate through a dedicated Authentik OAuth 2.1 provider using authorization code, PKCE `S256`, short-lived JWT access tokens, and renewable refresh tokens.
+
+Both resolve to the same Organization owner, enforce `organization:read` and `organization:write`, and record the authentication method, tool, result, target identifier, and time without logging titles or note contents. The route never accepts browser cookies or Internet-supplied Authentik identity headers.
 
 Users manage credentials from **Account → Settings → MCP**. The page shows the server URL, creates one independently revocable credential per device or client, displays a new token once, reports creation and last-use times, and retains revoked records for accountability. The browser API that backs this page is protected by the same Authentik owner session as Actions.
+
+OAuth discovery is published at `/.well-known/oauth-protected-resource`. OAuth access tokens must be issued by the configured Authentik issuer for the Organization MCP resource/client, contain a verified email and stable Authentik subject, and carry the required tool scope. The server also advertises OAuth security metadata on every tool and exposes a standard profile tool for connected-account identification.
 
 Actions carry monotonically increasing revisions. MCP writers can submit the revision they last read; stale writes fail instead of silently overwriting newer browser or agent changes.
 

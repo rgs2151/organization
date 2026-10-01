@@ -107,4 +107,4 @@ organization/
 
 ## Next phase
 
-The unified MCP currently exposes Actions, Action Page notes, and Activity. Journal tools will be added to the same endpoint only after the Journal data model and guided-reflection contract are approved.
+The unified MCP currently exposes an authenticated profile, Actions, Action Page notes, and Activity. It supports independently revocable personal credentials and Authentik OAuth for interactive clients such as ChatGPT. Journal tools will be added to the same endpoint only after the Journal data model and guided-reflection contract are approved.

@@ -32,7 +32,9 @@ The application rejects API requests unless the UID and email are present and `X
 
 The application container must remain on a private Docker network. Only Caddy may reach it. `/api/health` is intentionally unauthenticated for container orchestration; browser data endpoints require a resolved Authentik identity.
 
-`/mcp` is the deliberate exception to browser forward authentication. Caddy routes that exact path to Organization without Authentik headers, and Organization requires a hashed, application-issued bearer credential on every request. This keeps remote MCP clients independent of browser cookies without exposing the database or a trusted-header bypass.
+`/mcp` is the deliberate exception to browser forward authentication. Caddy routes that exact path to Organization without Authentik headers. Organization accepts either a hashed application-issued credential or a short-lived OAuth access token issued by the dedicated Authentik Organization MCP provider. Browser cookies and Internet-supplied Authentik identity headers are never accepted on this route.
+
+`/.well-known/oauth-protected-resource` and its path-specific `/mcp` variant are also public. They expose only RFC 9728 discovery metadata so interactive MCP clients can discover Authentik. All application data remains authenticated.
 
 ## Environment
 
@@ -45,6 +47,9 @@ The application container must remain on a private Docker network. Only Caddy ma
 | `ORGANIZATION_AUTH_MODE` | `authentik-proxy` | Production identity adapter |
 | `ORGANIZATION_AUTHENTIK_APP_SLUG` | `organization` | Required Authentik application header |
 | `ORGANIZATION_PUBLIC_ORIGIN` | `https://organization.singha.io` | Canonical origin used to validate and serve MCP requests |
+| `ORGANIZATION_OAUTH_ISSUER` | unset | Dedicated Authentik issuer; enables OAuth when paired with a client ID |
+| `ORGANIZATION_OAUTH_CLIENT_ID` | unset | Predefined public OAuth client identifier |
+| `ORGANIZATION_OAUTH_AUDIENCES` | MCP resource and client ID | Comma-separated JWT audiences accepted by the resource server |
 
 The compiled client and migration directories are internal image paths. `ORGANIZATION_CLIENT_PATH` and `ORGANIZATION_MIGRATIONS_PATH` exist for controlled testing but should not be overridden in the private-server deployment.
 
@@ -53,6 +58,8 @@ The compiled client and migration directories are internal image paths. `ORGANIZ
 ## MCP credentials
 
 Owners create, copy, inspect, and revoke credentials from **Account → Settings → MCP**. The raw token is returned to that authenticated browser exactly once. Only the SHA-256 token hash is stored. Each credential belongs to one Organization owner, has explicit read/write scopes, records last use, can be revoked independently, and writes a metadata-only audit record for each tool call. The raw credential must be stored on the MCP client and never committed to Git or placed in an MCP URL.
+
+Interactive clients such as ChatGPT use Authentik OAuth instead. The predefined client is public and uses authorization code with PKCE `S256`; it has no client secret to distribute. Access tokens are short-lived, refresh tokens require `offline_access`, and Organization verifies issuer, signature, expiration, audience, verified email, authorized party, and scopes on every connection. OAuth and personal-token tool calls share the same owner-scoped application operations and metadata-only audit log.
 
 The container command remains an emergency operator recovery interface, not the normal user flow:
 

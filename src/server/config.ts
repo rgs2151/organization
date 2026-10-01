@@ -26,6 +26,35 @@ function resolveAuthMode(): "development" | "authentik-proxy" {
 }
 
 const authMode = resolveAuthMode();
+const publicOrigin = process.env.ORGANIZATION_PUBLIC_ORIGIN
+  ?? (nodeEnvironment === "production" ? "https://organization.singha.io" : "http://127.0.0.1:3001");
+
+function resolveOAuthConfig() {
+  const issuer = process.env.ORGANIZATION_OAUTH_ISSUER?.trim();
+  const clientId = process.env.ORGANIZATION_OAUTH_CLIENT_ID?.trim();
+  const configuredAudiences = process.env.ORGANIZATION_OAUTH_AUDIENCES
+    ?.split(",")
+    .map((value) => value.trim())
+    .filter(Boolean);
+
+  if (!issuer && !clientId && !configuredAudiences?.length) return null;
+  if (!issuer || !clientId) {
+    throw new Error("ORGANIZATION_OAUTH_ISSUER and ORGANIZATION_OAUTH_CLIENT_ID must be configured together.");
+  }
+
+  const issuerUrl = new URL(issuer);
+  if (issuerUrl.protocol !== "https:" || issuerUrl.search || issuerUrl.hash) {
+    throw new Error("ORGANIZATION_OAUTH_ISSUER must be an HTTPS URL without a query or fragment.");
+  }
+
+  const resource = new URL("/mcp", publicOrigin).href;
+  return {
+    issuer: issuerUrl.href,
+    clientId,
+    resource,
+    audiences: configuredAudiences?.length ? configuredAudiences : [resource, clientId],
+  };
+}
 
 if (
   nodeEnvironment === "production"
@@ -48,8 +77,8 @@ export const config = {
   migrationsDirectory: resolveFromRoot(process.env.ORGANIZATION_MIGRATIONS_PATH, "migrations"),
   authMode,
   authentikAppSlug: process.env.ORGANIZATION_AUTHENTIK_APP_SLUG ?? "organization",
-  publicOrigin: process.env.ORGANIZATION_PUBLIC_ORIGIN
-    ?? (nodeEnvironment === "production" ? "https://organization.singha.io" : "http://127.0.0.1:3001"),
+  publicOrigin,
+  oauth: resolveOAuthConfig(),
   developmentUser: {
     id: process.env.ORGANIZATION_DEV_USER_ID ?? "dev-rudra",
     displayName: process.env.ORGANIZATION_DEV_USER_NAME ?? "Rudra",
@@ -62,8 +91,8 @@ if (!Number.isInteger(config.port) || config.port < 1 || config.port > 65535) {
 }
 
 try {
-  const publicOrigin = new URL(config.publicOrigin);
-  if (publicOrigin.origin !== config.publicOrigin || !["http:", "https:"].includes(publicOrigin.protocol)) {
+  const parsedPublicOrigin = new URL(config.publicOrigin);
+  if (parsedPublicOrigin.origin !== config.publicOrigin || !["http:", "https:"].includes(parsedPublicOrigin.protocol)) {
     throw new Error();
   }
 } catch {

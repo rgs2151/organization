@@ -14,13 +14,19 @@ type TokenRow = {
   created_at: string;
   last_used_at: string | null;
   revoked_at: string | null;
+  email: string;
+  display_name: string;
 };
 
 export type McpPrincipal = {
   ownerId: string;
-  tokenId: string;
-  tokenName: string;
+  email: string;
+  displayName: string;
   scopes: string[];
+  authMethod: "personal_token" | "oauth";
+  tokenId: string | null;
+  tokenName: string | null;
+  oauthClientId: string | null;
 };
 
 export class McpTokenRepository {
@@ -47,9 +53,11 @@ export class McpTokenRepository {
     const id = tokenId(token);
     if (!id) return null;
     const row = this.database.prepare(`
-      SELECT id, owner_id, name, token_hash, scopes, created_at, last_used_at, revoked_at
-      FROM mcp_tokens
-      WHERE id = ? AND revoked_at IS NULL
+      SELECT t.id, t.owner_id, t.name, t.token_hash, t.scopes, t.created_at,
+             t.last_used_at, t.revoked_at, u.email, u.display_name
+      FROM mcp_tokens t
+      JOIN organization_users u ON u.id = t.owner_id
+      WHERE t.id = ? AND t.revoked_at IS NULL
     `).get(id) as unknown as TokenRow | undefined;
     if (!row || !safeHashEqual(row.token_hash, tokenHash(token))) return null;
 
@@ -58,8 +66,12 @@ export class McpTokenRepository {
     `).run(id);
     return {
       ownerId: row.owner_id,
+      email: row.email,
+      displayName: row.display_name,
+      authMethod: "personal_token",
       tokenId: row.id,
       tokenName: row.name,
+      oauthClientId: null,
       scopes: parseScopes(row.scopes),
     };
   }
@@ -86,9 +98,18 @@ export class McpTokenRepository {
 
   recordAudit(principal: McpPrincipal, toolName: string, outcome: "success" | "error", targetId?: string) {
     this.database.prepare(`
-      INSERT INTO mcp_audit_log(owner_id, token_id, tool_name, outcome, target_id)
-      VALUES (?, ?, ?, ?, ?)
-    `).run(principal.ownerId, principal.tokenId, toolName, outcome, targetId ?? null);
+      INSERT INTO mcp_audit_log(
+        owner_id, token_id, auth_method, oauth_client_id, tool_name, outcome, target_id
+      ) VALUES (?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      principal.ownerId,
+      principal.tokenId,
+      principal.authMethod,
+      principal.oauthClientId,
+      toolName,
+      outcome,
+      targetId ?? null,
+    );
   }
 
   private getRequired(ownerId: string, id: string) {

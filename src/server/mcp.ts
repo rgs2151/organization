@@ -3,21 +3,28 @@ import { createMcpHandler, McpServer, type AuthInfo, type CallToolResult } from 
 import * as z from "zod/v4";
 import { ACTION_COLORS, type RichTextDocument, type RichTextNode } from "../shared/contracts.js";
 import { ActionRepository } from "./action-repository.js";
+import {
+  ORGANIZATION_OAUTH_SCOPES,
+  type McpOAuthAuthenticator,
+} from "./mcp-oauth.js";
 import { type McpPrincipal, McpTokenRepository } from "./mcp-token-repository.js";
 import { applySecurityHeaders } from "./static-files.js";
 
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 const ACTION_ID = z.string().uuid().describe("Organization action ID");
 const REVISION = z.number().int().positive().optional().describe("Revision returned by the last read; use it to prevent overwriting a newer change");
+const OAUTH_SECURITY = [{ type: "oauth2", scopes: [...ORGANIZATION_OAUTH_SCOPES] }];
+const AUTHENTICATED_TOOL_META = { securitySchemes: OAUTH_SECURITY };
 
 export function createOrganizationMcp(
   repository: ActionRepository,
   credentials: McpTokenRepository,
   publicOrigin: string,
+  oauth: McpOAuthAuthenticator | null = null,
 ) {
   const handler = createMcpHandler((context) => {
     const principal = principalFromAuth(context.authInfo);
-    return organizationMcpServer(repository, credentials, principal);
+    return organizationMcpServer(repository, credentials, principal, oauth);
   }, {
     legacy: "stateless",
     responseMode: "auto",
@@ -40,10 +47,12 @@ export function createOrganizationMcp(
 
       const authorization = singleHeader(request.headers.authorization);
       const token = authorization?.match(/^Bearer\s+(.+)$/i)?.[1]?.trim();
-      const principal = token ? credentials.authenticate(token) : null;
+      const principal = token
+        ? credentials.authenticate(token) ?? await oauth?.authenticate(token) ?? null
+        : null;
       if (!token || !principal) {
         sendMcpError(response, 401, "A valid Organization MCP credential is required.", {
-          "www-authenticate": 'Bearer realm="Organization MCP"',
+          "www-authenticate": oauth?.challenge() ?? 'Bearer realm="Organization MCP"',
         });
         return;
       }
@@ -56,7 +65,7 @@ export function createOrganizationMcp(
       });
       const authInfo: AuthInfo = {
         token,
-        clientId: `organization:${principal.tokenId}`,
+        clientId: principal.oauthClientId ?? `organization:${principal.tokenId}`,
         scopes: principal.scopes,
         resource: new URL("/mcp", publicOrigin),
         extra: { principal },
@@ -72,6 +81,7 @@ export function createOrganizationMcp(
       });
       response.end(bytes);
     },
+    protectedResourceMetadata: () => oauth?.protectedResourceMetadata() ?? null,
     close: () => handler.close(),
   };
 }
@@ -80,24 +90,44 @@ function organizationMcpServer(
   repository: ActionRepository,
   credentials: McpTokenRepository,
   principal: McpPrincipal,
+  oauth: McpOAuthAuthenticator | null,
 ) {
   const server = new McpServer(
-    { name: "organization", version: "0.7.0" },
+    { name: "organization", version: "0.8.0" },
     {
       instructions: "Organization is the user's unified personal system. Read current context before making broad scheduling changes. Explicit requests such as scheduling one stated action may be applied directly; preview broad reorganizations first. Preserve the user's words in notes, label interpretations as hypotheses, and never claim an MCP write succeeded unless the tool returned success. Revisions prevent stale overwrites. Destructive deletion requires explicit user intent.",
     },
   );
 
   const readTool = <T>(name: string, target: ((input: T) => string | undefined) | undefined, operation: (input: T) => unknown) =>
-    async (input: T): Promise<CallToolResult> => audited(credentials, principal, name, target?.(input), () => {
+    async (input: T): Promise<CallToolResult> => audited(credentials, principal, oauth, name, target?.(input), () => {
       requireScope(principal, "organization:read");
       return operation(input);
     });
   const writeTool = <T>(name: string, target: ((input: T) => string | undefined) | undefined, operation: (input: T) => unknown) =>
-    async (input: T): Promise<CallToolResult> => audited(credentials, principal, name, target?.(input), () => {
+    async (input: T): Promise<CallToolResult> => audited(credentials, principal, oauth, name, target?.(input), () => {
       requireScope(principal, "organization:write");
       return operation(input);
     });
+
+  server.registerTool("organization_get_profile", {
+    title: "Get Organization profile",
+    description: "Return the Organization profile represented by the authenticated connection.",
+    inputSchema: z.object({}),
+    outputSchema: z.object({
+      id: z.string().min(1),
+      name: z.string().min(1),
+      email: z.string().email(),
+      nickname: z.string().min(1),
+    }),
+    annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+    _meta: { ...AUTHENTICATED_TOOL_META, "openai/profile": true },
+  }, readTool("organization_get_profile", undefined, () => ({
+    id: principal.ownerId,
+    name: principal.displayName,
+    email: principal.email,
+    nickname: `${principal.displayName} — Singha Organization`,
+  })));
 
   server.registerTool("organization_get_context", {
     title: "Get Organization context",
@@ -108,6 +138,7 @@ function organizationMcpServer(
       completedLookbackDays: z.number().int().min(0).max(31).default(7),
     }),
     annotations: { readOnlyHint: true, destructiveHint: false },
+    _meta: AUTHENTICATED_TOOL_META,
   }, readTool("organization_get_context", undefined, ({ date, daysAhead, completedLookbackDays }) => {
     const actions = repository.list(principal.ownerId);
     const end = shiftDate(date, daysAhead);
@@ -135,6 +166,7 @@ function organizationMcpServer(
       limit: z.number().int().min(1).max(500).default(200),
     }),
     annotations: { readOnlyHint: true, destructiveHint: false },
+    _meta: AUTHENTICATED_TOOL_META,
   }, readTool("actions_list", undefined, ({ startDate, endDate, someday, completed, query, limit }) => {
     const needle = query?.trim().toLocaleLowerCase();
     return {
@@ -154,6 +186,7 @@ function organizationMcpServer(
     description: "Read one action, including its structured note and revision.",
     inputSchema: z.object({ id: ACTION_ID }),
     annotations: { readOnlyHint: true, destructiveHint: false },
+    _meta: AUTHENTICATED_TOOL_META,
   }, readTool("actions_get", ({ id }) => id, ({ id }) => ({ action: repository.get(principal.ownerId, id) })));
 
   server.registerTool("actions_create", {
@@ -167,6 +200,7 @@ function organizationMcpServer(
       note: z.string().max(100_000).optional().describe("Optional plain-text note"),
     }),
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
+    _meta: AUTHENTICATED_TOOL_META,
   }, writeTool("actions_create", undefined, ({ title, date, beforeId, color, note }) => {
     let action = repository.create(principal.ownerId, { title, date, beforeId });
     if (color || note) {
@@ -190,6 +224,7 @@ function organizationMcpServer(
       completed: z.boolean().optional(),
     }),
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
+    _meta: AUTHENTICATED_TOOL_META,
   }, writeTool("actions_update", ({ id }) => id, ({ id, expectedRevision, ...patch }) => ({
     action: repository.update(principal.ownerId, id, patch, expectedRevision),
   })));
@@ -204,6 +239,7 @@ function organizationMcpServer(
       beforeId: ACTION_ID.optional(),
     }),
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
+    _meta: AUTHENTICATED_TOOL_META,
   }, writeTool("actions_move", ({ id }) => id, ({ id, expectedRevision, date, beforeId }) => {
     const actions = repository.move(principal.ownerId, id, { date, beforeId }, expectedRevision);
     return { action: actions.find((action) => action.id === id), actions };
@@ -218,6 +254,7 @@ function organizationMcpServer(
       text: z.string().min(1).max(100_000),
     }),
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
+    _meta: AUTHENTICATED_TOOL_META,
   }, writeTool("action_note_append", ({ id }) => id, ({ id, expectedRevision, text }) => {
     const action = repository.get(principal.ownerId, id);
     return { action: repository.update(principal.ownerId, id, { note: appendText(action.note, text) }, expectedRevision) };
@@ -228,6 +265,7 @@ function organizationMcpServer(
     description: "Permanently delete one action. Call only when the user explicitly requested deletion.",
     inputSchema: z.object({ id: ACTION_ID, expectedRevision: REVISION }),
     annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
+    _meta: AUTHENTICATED_TOOL_META,
   }, writeTool("actions_delete", ({ id }) => id, ({ id, expectedRevision }) => {
     repository.delete(principal.ownerId, id, expectedRevision);
     return { deleted: true, id };
@@ -238,6 +276,7 @@ function organizationMcpServer(
     description: "Return daily completed-action counts for one year.",
     inputSchema: z.object({ year: z.number().int().min(2000).max(2200) }),
     annotations: { readOnlyHint: true, destructiveHint: false },
+    _meta: AUTHENTICATED_TOOL_META,
   }, readTool("activity_get", undefined, ({ year }) => {
     const daily: Record<string, number> = {};
     for (const action of repository.list(principal.ownerId)) {
@@ -253,6 +292,7 @@ function organizationMcpServer(
 async function audited(
   credentials: McpTokenRepository,
   principal: McpPrincipal,
+  oauth: McpOAuthAuthenticator | null,
   toolName: string,
   targetId: string | undefined,
   operation: () => unknown,
@@ -263,9 +303,13 @@ async function audited(
     return resultContent(result);
   } catch (error) {
     credentials.recordAudit(principal, toolName, "error", targetId);
+    const authMeta = error instanceof McpScopeError && principal.authMethod === "oauth" && oauth
+      ? { "mcp/www_authenticate": [oauth.challenge("insufficient_scope")] }
+      : undefined;
     return {
       isError: true,
       content: [{ type: "text", text: error instanceof Error ? error.message : "Organization could not complete the operation." }],
+      ...(authMeta ? { _meta: authMeta } : {}),
     };
   }
 }
@@ -287,8 +331,10 @@ function principalFromAuth(authInfo: AuthInfo | undefined) {
 }
 
 function requireScope(principal: McpPrincipal, scope: string) {
-  if (!principal.scopes.includes(scope)) throw new Error(`The MCP credential lacks ${scope}.`);
+  if (!principal.scopes.includes(scope)) throw new McpScopeError(`The MCP credential lacks ${scope}.`);
 }
+
+class McpScopeError extends Error {}
 
 function noteText(document: RichTextDocument) {
   const pieces: string[] = [];

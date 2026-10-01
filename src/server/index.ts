@@ -16,6 +16,7 @@ import { ActionRepository, ConflictError, InputError, NotFoundError } from "./ac
 import { AttachmentRepository } from "./attachment-repository.js";
 import { config } from "./config.js";
 import { openDatabase } from "./database.js";
+import { AuthentikMcpOAuth } from "./mcp-oauth.js";
 import { createOrganizationMcp } from "./mcp.js";
 import { McpTokenRepository } from "./mcp-token-repository.js";
 import { SessionResolver, UnauthorizedError } from "./session.js";
@@ -26,7 +27,8 @@ const repository = new ActionRepository(database);
 const attachments = new AttachmentRepository(database);
 const mcpTokens = new McpTokenRepository(database);
 const sessions = new SessionResolver(repository, config);
-const mcp = createOrganizationMcp(repository, mcpTokens, config.publicOrigin);
+const mcpOAuth = config.oauth ? new AuthentikMcpOAuth(repository, config.oauth) : null;
+const mcp = createOrganizationMcp(repository, mcpTokens, config.publicOrigin, mcpOAuth);
 
 const server = createServer(async (request, response) => {
   try {
@@ -62,13 +64,27 @@ async function route(request: IncomingMessage, response: ServerResponse) {
   const url = new URL(request.url ?? "/", `http://${request.headers.host ?? "localhost"}`);
   const isApiPath = url.pathname === "/api" || url.pathname.startsWith("/api/");
 
+  if (
+    method === "GET"
+    && (url.pathname === "/.well-known/oauth-protected-resource"
+      || url.pathname === "/.well-known/oauth-protected-resource/mcp")
+  ) {
+    const metadata = mcp.protectedResourceMetadata();
+    if (!metadata) {
+      sendJson(response, 404, { error: "OAuth is not configured." });
+      return;
+    }
+    sendJson(response, 200, metadata);
+    return;
+  }
+
   if (url.pathname === "/mcp") {
     await mcp.handle(request, response);
     return;
   }
 
   if (method === "GET" && url.pathname === "/api/health") {
-    sendJson(response, 200, { status: "ok", version: "0.7.0" });
+    sendJson(response, 200, { status: "ok", version: "0.8.0" });
     return;
   }
   if ((method === "GET" || method === "HEAD") && !isApiPath) {
