@@ -136,6 +136,16 @@ test("actions remain owner-scoped and support the complete persistence lifecycle
   repository.delete(owner.id, created.id);
   assert.equal(repository.list(owner.id).some((action) => action.id === created.id), false);
   assert.equal(attachments.get(owner.id, "attachment-kept").filename, "kept.png");
+  const trashed = database.prepare(`
+    SELECT deleted_at
+    FROM actions
+    WHERE owner_id = ? AND id = ?
+  `).get(owner.id, created.id);
+  assert.ok(trashed?.deleted_at);
+  assert.throws(
+    () => database.prepare("DELETE FROM actions WHERE owner_id = ? AND id = ?").run(owner.id, created.id),
+    /Actions are retained permanently/,
+  );
   const restoredDeleted = repository.restore(owner.id, created.id, "a-01");
   assert.equal(restoredDeleted.find((action) => action.id === created.id)?.title, "Persist this action");
   assert.equal(
