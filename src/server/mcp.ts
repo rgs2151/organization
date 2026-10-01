@@ -11,7 +11,10 @@ import { type McpPrincipal, McpTokenRepository } from "./mcp-token-repository.js
 import { applySecurityHeaders } from "./static-files.js";
 
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
-const ACTION_ID = z.string().uuid().describe("Organization action ID");
+const ACTION_ID = z.union([
+  z.string().uuid(),
+  z.string().regex(/^notion:[0-9a-fA-F]{32}$/),
+]).describe("Organization action ID: a UUID or an imported notion:<32 hex characters> ID");
 const REVISION = z.number().int().positive().optional().describe("Revision returned by the last read; use it to prevent overwriting a newer change");
 const OAUTH_SECURITY = [{ type: "oauth2", scopes: [...ORGANIZATION_OAUTH_SCOPES] }];
 const AUTHENTICATED_TOOL_META = { securitySchemes: OAUTH_SECURITY };

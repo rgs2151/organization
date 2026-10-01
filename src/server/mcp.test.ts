@@ -17,6 +17,11 @@ test("Organization MCP authenticates a revocable owner credential and uses appli
   const credentials = new McpTokenRepository(database);
   const owner = { id: "mcp-owner", email: "mcp@example.com", displayName: "MCP Owner" };
   actions.ensureDevelopmentUser(owner);
+  const importedActionId = "notion:0123456789abcdef0123456789abcdef";
+  database.prepare(`
+    INSERT INTO actions(id, owner_id, title, scheduled_for, position)
+    VALUES (?, ?, ?, ?, ?)
+  `).run(importedActionId, owner.id, "Imported through Notion", "2026-08-05", 8192);
   const createdCredential = credentials.create(owner.id, "Test client");
   const otherOwner = actions.ensureAuthenticatedUser({
     subject: "other-mcp-owner",
@@ -81,20 +86,132 @@ test("Organization MCP authenticates a revocable owner credential and uses appli
   assert.ok(listedTools.tools.some((tool) => tool.name === "organization_get_context"));
   assert.ok(listedTools.tools.some((tool) => tool.name === "actions_move"));
 
+  const importedGetResult = await client.callTool({
+    name: "actions_get",
+    arguments: { id: importedActionId },
+  });
+  assert.equal(importedGetResult.isError, undefined);
+  let importedAction = (importedGetResult.structuredContent as {
+    action: { id: string; revision: number };
+  }).action;
+  assert.equal(importedAction.id, importedActionId);
+
+  const importedUpdateResult = await client.callTool({
+    name: "actions_update",
+    arguments: {
+      id: importedActionId,
+      expectedRevision: importedAction.revision,
+      title: "Updated imported action",
+    },
+  });
+  assert.equal(importedUpdateResult.isError, undefined);
+  importedAction = (importedUpdateResult.structuredContent as {
+    action: { id: string; revision: number };
+  }).action;
+
+  const importedNoteResult = await client.callTool({
+    name: "action_note_append",
+    arguments: {
+      id: importedActionId,
+      expectedRevision: importedAction.revision,
+      text: "Imported action note",
+    },
+  });
+  assert.equal(importedNoteResult.isError, undefined);
+  assert.match(JSON.stringify(importedNoteResult.structuredContent), /Imported action note/);
+  importedAction = (importedNoteResult.structuredContent as {
+    action: { id: string; revision: number };
+  }).action;
+
   const createResult = await client.callTool({
     name: "actions_create",
-    arguments: { title: "Created through MCP", date: null, note: "Original thought" },
+    arguments: {
+      title: "Created through MCP",
+      date: "2026-08-05",
+      beforeId: importedActionId,
+    },
   });
   assert.equal(createResult.isError, undefined);
-  const createdAction = (createResult.structuredContent as { action: { id: string; revision: number } }).action;
+  let createdAction = (createResult.structuredContent as {
+    action: { id: string; revision: number };
+  }).action;
   assert.ok(createdAction.id);
 
-  const appendResult = await client.callTool({
-    name: "action_note_append",
-    arguments: { id: createdAction.id, expectedRevision: createdAction.revision, text: "Follow-up" },
+  const createdGetResult = await client.callTool({
+    name: "actions_get",
+    arguments: { id: createdAction.id },
   });
-  assert.equal(appendResult.isError, undefined);
-  assert.match(JSON.stringify(appendResult.structuredContent), /Follow-up/);
+  assert.equal(createdGetResult.isError, undefined);
+  assert.equal((createdGetResult.structuredContent as { action: { id: string } }).action.id, createdAction.id);
+
+  const createdUpdateResult = await client.callTool({
+    name: "actions_update",
+    arguments: {
+      id: createdAction.id,
+      expectedRevision: createdAction.revision,
+      title: "Updated UUID action",
+    },
+  });
+  assert.equal(createdUpdateResult.isError, undefined);
+  createdAction = (createdUpdateResult.structuredContent as {
+    action: { id: string; revision: number };
+  }).action;
+
+  const createdNoteResult = await client.callTool({
+    name: "action_note_append",
+    arguments: {
+      id: createdAction.id,
+      expectedRevision: createdAction.revision,
+      text: "UUID action note",
+    },
+  });
+  assert.equal(createdNoteResult.isError, undefined);
+  assert.match(JSON.stringify(createdNoteResult.structuredContent), /UUID action note/);
+  createdAction = (createdNoteResult.structuredContent as {
+    action: { id: string; revision: number };
+  }).action;
+
+  const createdMoveResult = await client.callTool({
+    name: "actions_move",
+    arguments: {
+      id: createdAction.id,
+      expectedRevision: createdAction.revision,
+      date: "2026-08-05",
+      beforeId: importedActionId,
+    },
+  });
+  assert.equal(createdMoveResult.isError, undefined);
+  createdAction = (createdMoveResult.structuredContent as {
+    action: { id: string; revision: number };
+  }).action;
+
+  const importedMoveResult = await client.callTool({
+    name: "actions_move",
+    arguments: {
+      id: importedActionId,
+      expectedRevision: importedAction.revision,
+      date: "2026-08-05",
+      beforeId: createdAction.id,
+    },
+  });
+  assert.equal(importedMoveResult.isError, undefined);
+  importedAction = (importedMoveResult.structuredContent as {
+    action: { id: string; revision: number };
+  }).action;
+
+  const importedDeleteResult = await client.callTool({
+    name: "actions_delete",
+    arguments: { id: importedActionId, expectedRevision: importedAction.revision },
+  });
+  assert.equal(importedDeleteResult.isError, undefined);
+  assert.deepEqual(importedDeleteResult.structuredContent, { deleted: true, id: importedActionId });
+
+  const createdDeleteResult = await client.callTool({
+    name: "actions_delete",
+    arguments: { id: createdAction.id, expectedRevision: createdAction.revision },
+  });
+  assert.equal(createdDeleteResult.isError, undefined);
+  assert.deepEqual(createdDeleteResult.structuredContent, { deleted: true, id: createdAction.id });
 
   credentials.revoke(owner.id, createdCredential.credential.id);
   assert.equal((await fetch(`${origin}/mcp`, {
