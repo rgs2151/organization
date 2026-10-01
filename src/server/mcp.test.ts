@@ -53,6 +53,29 @@ test("Organization MCP authenticates a revocable owner credential and uses appli
   });
 
   assert.equal((await fetch(`${origin}/mcp`)).status, 401);
+  const discoverResponse = await fetch(`${origin}/mcp`, {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${createdCredential.token}`,
+      accept: "application/json, text/event-stream",
+      "content-type": "application/json",
+      "mcp-method": "server/discover",
+      "mcp-protocol-version": "2026-07-28",
+    },
+    body: JSON.stringify({
+      jsonrpc: "2.0",
+      id: 1,
+      method: "server/discover",
+      params: {
+        _meta: {
+          "io.modelcontextprotocol/protocolVersion": "2026-07-28",
+          "io.modelcontextprotocol/clientCapabilities": {},
+          "io.modelcontextprotocol/clientInfo": { name: "organization-modern-test", version: "1.0.0" },
+        },
+      },
+    }),
+  });
+  assert.equal(discoverResponse.status, 200, await discoverResponse.text());
   await client.connect(transport);
   const listedTools = await client.listTools();
   assert.ok(listedTools.tools.some((tool) => tool.name === "organization_get_context"));

@@ -93,7 +93,7 @@ function organizationMcpServer(
   oauth: McpOAuthAuthenticator | null,
 ) {
   const server = new McpServer(
-    { name: "organization", version: "0.8.0" },
+    { name: "organization", version: "0.8.1" },
     {
       instructions: "Organization is the user's unified personal system. Read current context before making broad scheduling changes. Explicit requests such as scheduling one stated action may be applied directly; preview broad reorganizations first. Preserve the user's words in notes, label interpretations as hypotheses, and never claim an MCP write succeeded unless the tool returned success. Revisions prevent stale overwrites. Destructive deletion requires explicit user intent.",
     },
@@ -382,8 +382,10 @@ async function readMcpBody(request: IncomingMessage) {
 
 function mcpHeaders(source: IncomingHttpHeaders) {
   const headers = new Headers();
-  for (const name of ["accept", "content-type", "mcp-protocol-version", "mcp-session-id", "last-event-id", "user-agent"]) {
-    const value = singleHeader(source[name]);
+  const ordinaryHeaders = new Set(["accept", "content-type", "last-event-id", "user-agent"]);
+  for (const [name, rawValue] of Object.entries(source)) {
+    if (!ordinaryHeaders.has(name) && !name.startsWith("mcp-")) continue;
+    const value = singleHeader(rawValue);
     if (value) headers.set(name, value);
   }
   return headers;

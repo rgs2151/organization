@@ -84,7 +84,7 @@ async function route(request: IncomingMessage, response: ServerResponse) {
   }
 
   if (method === "GET" && url.pathname === "/api/health") {
-    sendJson(response, 200, { status: "ok", version: "0.8.0" });
+    sendJson(response, 200, { status: "ok", version: "0.8.1" });
     return;
   }
   if ((method === "GET" || method === "HEAD") && !isApiPath) {
