@@ -86,6 +86,36 @@ test("Organization MCP authenticates a revocable owner credential and uses appli
   assert.ok(listedTools.tools.some((tool) => tool.name === "organization_get_context"));
   assert.ok(listedTools.tools.some((tool) => tool.name === "actions_move"));
 
+  type JsonSchema = {
+    type?: string;
+    pattern?: string;
+    format?: string;
+    anyOf?: unknown;
+    properties?: Record<string, JsonSchema>;
+  };
+  const actionIdFields = [
+    ["actions_get", "id"],
+    ["actions_create", "beforeId"],
+    ["actions_update", "id"],
+    ["actions_move", "id"],
+    ["actions_move", "beforeId"],
+    ["action_note_append", "id"],
+    ["actions_delete", "id"],
+  ] as const;
+  for (const [toolName, fieldName] of actionIdFields) {
+    const tool = listedTools.tools.find((candidate) => candidate.name === toolName);
+    assert.ok(tool, `${toolName} should be advertised`);
+    const field = (tool.inputSchema as JsonSchema).properties?.[fieldName];
+    assert.ok(field, `${toolName}.${fieldName} should be advertised`);
+    assert.equal(field.type, "string");
+    assert.equal(field.format, undefined);
+    assert.equal(field.anyOf, undefined);
+    assert.ok(field.pattern);
+    const pattern = new RegExp(field.pattern);
+    assert.equal(pattern.test("7e57d004-2b97-4e7a-b45f-5387367791cd"), true);
+    assert.equal(pattern.test(importedActionId), true);
+  }
+
   const importedGetResult = await client.callTool({
     name: "actions_get",
     arguments: { id: importedActionId },
