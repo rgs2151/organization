@@ -528,7 +528,7 @@ html.is-marquee-selecting * {
   background: transparent;
 }
 
-.completion-button span {
+.completion-button .completion-mark {
   display: grid;
   width: 17px;
   height: 17px;
@@ -552,9 +552,34 @@ html.is-marquee-selecting * {
 }
 
 .action-item.is-complete .completion-button svg { opacity: 1; }
-.action-item.is-celebrating .completion-button span { animation: completion-stamp 340ms cubic-bezier(.22,1,.36,1); }
+.action-item.is-celebrating .completion-mark { animation: completion-stamp 440ms cubic-bezier(.22,1,.36,1); }
 .action-item.is-celebrating .completion-button svg { animation: completion-ink 300ms ease-out; }
-.action-item.is-celebrating { animation: completion-settle 520ms ease-out; }
+.completion-wash {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: #65edac;
+  pointer-events: none;
+  animation: completion-settle 650ms ease-out forwards;
+}
+
+.completion-burst {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.completion-burst i {
+  position: absolute;
+  top: calc(50% - 2px);
+  left: calc(50% - 2px);
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--green);
+  opacity: 0;
+  animation: completion-spark 480ms var(--burst-delay) cubic-bezier(.22,1,.36,1) forwards;
+}
 .action-item.is-celebrating .completion-button::after {
   position: absolute;
   width: 24px;
@@ -566,30 +591,62 @@ html.is-marquee-selecting * {
   animation: completion-ring 460ms cubic-bezier(.22,1,.36,1) forwards;
 }
 
-@keyframes completion-stamp { from { transform: scale(.72); } to { transform: scale(1); } }
+@keyframes completion-stamp { 0% { transform: scale(.65); } 45% { transform: scale(1.28); } 75% { transform: scale(.94); } 100% { transform: scale(1); } }
 @keyframes completion-ring { from { opacity: .65; transform: scale(.6); } to { opacity: 0; transform: scale(1.9); } }
 @keyframes completion-ink { from { stroke-dasharray: 14; stroke-dashoffset: 14; } to { stroke-dasharray: 14; stroke-dashoffset: 0; } }
-@keyframes completion-settle { from { opacity: 1; } to { opacity: .68; } }
+@keyframes completion-settle { from { opacity: .28; } to { opacity: 0; } }
+@keyframes completion-spark { 0% { opacity: 0; transform: scale(.5); } 20% { opacity: .9; } 100% { opacity: 0; transform: translate(var(--burst-x), var(--burst-y)) scale(.35); } }
 
-.completion-button:hover span {
+.completion-button:hover .completion-mark {
   border-color: var(--green);
 }
 
-.action-item.is-complete .completion-button span {
+.action-item.is-complete .completion-mark {
   border-color: var(--green);
   background: var(--green);
 }
 
 .action-item.is-complete .action-title {
-  color: #9b9b95;
+  color: #75756f;
   text-decoration: line-through;
   text-decoration-color: #71716c;
   text-decoration-thickness: 1.5px;
 }
 
 .action-item.is-complete {
-  opacity: 0.68;
+  opacity: 1;
 }
+
+/* Quick controls float above the card, never moving its text or hit area. */
+.action-quick-colors {
+  position: absolute;
+  z-index: 4;
+  right: 0;
+  bottom: calc(100% - 4px);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  border: 1px solid #deded8;
+  border-radius: 999px;
+  padding: 6px;
+  background: #fff;
+  box-shadow: 0 3px 10px rgba(32, 32, 27, .1);
+}
+
+.action-quick-colors button {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 18px;
+  border: 1px solid rgba(32, 32, 27, .15);
+  border-radius: 50%;
+  padding: 0;
+  background: var(--swatch-color);
+  transition: transform 120ms ease-out, box-shadow 120ms ease-out;
+}
+
+.action-quick-colors button:hover { transform: scale(1.15); }
+.action-quick-colors button.is-active { box-shadow: 0 0 0 2px white, 0 0 0 3px #79796f; }
+.action-quick-colors button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 .action-composer {
   display: flex;
@@ -892,7 +949,7 @@ html.is-marquee-selecting * {
   flex-basis: 27px;
 }
 
-.action-item.is-compact .completion-button span {
+.action-item.is-compact .completion-mark {
   width: 14px;
   height: 14px;
   font-size: 8px;
@@ -904,6 +961,12 @@ html.is-marquee-selecting * {
   border: 1px solid #d8d8d2;
   border-radius: 7px;
   padding: 3px;
+}
+
+.action-item.is-complete,
+.action-item.is-bucket.is-complete,
+.month-day .action-item.is-complete {
+  background: #eaeae5;
 }
 
 .month-day .action-composer input {
@@ -981,26 +1044,32 @@ html.is-marquee-selecting * {
 }
 
 .mini-days button i {
-  display: grid;
-  place-items: center;
-  flex: none;
-  width: min(var(--completion-size), 100%);
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: calc(100% - 4px);
+  max-width: 28px;
   height: auto;
   aspect-ratio: 1;
   border-radius: 50%;
-  background: #238650;
-  color: white;
-  font-size: 11px;
-  font-weight: 650;
-  font-style: normal;
-  font-variant-numeric: tabular-nums;
-  box-shadow: 0 0 0 1px rgba(21, 112, 67, 0.08);
+  background: #a5e2bf;
+  transform: translate(-50%, -50%) scale(var(--completion-scale));
+  pointer-events: none;
   transition: transform 140ms ease, background 140ms ease;
 }
 
+.mini-days .completion-count {
+  position: relative;
+  color: #145c38;
+  font-size: 11px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+}
+
 .mini-days button.has-completions:hover i {
-  transform: scale(1.18);
-  background: #268b5b;
+  transform: translate(-50%, -50%) scale(calc(var(--completion-scale) * 1.1));
+  background: #8bd8ab;
 }
 
 .activity-section {

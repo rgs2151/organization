@@ -185,6 +185,7 @@ function ActionItem({
   dropAfter = false,
   onOpen,
   onComplete,
+  onColorChange,
   onDragStart,
   onDragEnd,
   onDragPosition,
@@ -200,6 +201,7 @@ function ActionItem({
   dropAfter?: boolean;
   onOpen: (event: ReactMouseEvent<HTMLButtonElement>) => void;
   onComplete: () => void;
+  onColorChange: (color: ActionColor) => void;
   onDragStart: (event: DragEvent<HTMLDivElement>) => string[];
   onDragEnd: () => void;
   onDragPosition: (event: DragEvent<HTMLDivElement>) => void;
@@ -207,13 +209,17 @@ function ActionItem({
   onContextMenu: (x: number, y: number) => void;
 }) {
   const [celebrating, setCelebrating] = useState(false);
+  const [showColors, setShowColors] = useState(false);
+  const [colorsAlignLeft, setColorsAlignLeft] = useState(false);
   const previousCompleted = useRef(action.completed);
   useEffect(() => {
     if (action.completed && !previousCompleted.current) setCelebrating(true);
+    if (!action.completed) setCelebrating(false);
     previousCompleted.current = action.completed;
   }, [action.completed]);
   const style = {
     "--action-color": ACTION_COLOR_VALUES[action.color],
+    ...(showColors ? { zIndex: 12 } : {}),
   } as CSSProperties;
 
   return (
@@ -222,6 +228,21 @@ function ActionItem({
       data-action-id={action.id}
       aria-selected={isSelected}
       draggable
+      onPointerEnter={(event) => {
+        if (event.pointerType === "touch" || isDragging) return;
+        setColorsAlignLeft(event.currentTarget.getBoundingClientRect().right < 136);
+        setShowColors(true);
+      }}
+      onPointerLeave={(event) => {
+        if (!event.currentTarget.contains(document.activeElement) || !document.activeElement?.matches(":focus-visible")) setShowColors(false);
+      }}
+      onFocus={(event) => {
+        setColorsAlignLeft(event.currentTarget.getBoundingClientRect().right < 136);
+        setShowColors(true);
+      }}
+      onBlur={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget)) setShowColors(false);
+      }}
       onContextMenu={(event) => {
         event.preventDefault();
         event.stopPropagation();
@@ -235,6 +256,7 @@ function ActionItem({
       }}
       onAnimationEnd={(event) => { if (event.animationName === "completion-settle") setCelebrating(false); }}
       onDragStart={(event) => {
+        setShowColors(false);
         const actionIds = onDragStart(event);
         event.dataTransfer.effectAllowed = "move";
         event.dataTransfer.setData("text/action-id", action.id);
@@ -259,6 +281,31 @@ function ActionItem({
       <button className="action-open" type="button" onClick={onOpen}>
         <span className="action-title"><span>{action.title}</span></span>
       </button>
+      {showColors && !isDragging && (
+        <div
+          className="action-quick-colors"
+          role="group"
+          aria-label="Quick action color"
+          style={colorsAlignLeft ? { left: 0, right: "auto" } : undefined}
+          onMouseDown={(event) => { event.preventDefault(); event.stopPropagation(); }}
+          onKeyDown={(event) => {
+            if (event.key === "Escape") { event.stopPropagation(); setShowColors(false); }
+          }}
+        >
+          {(Object.keys(ACTION_COLOR_VALUES) as ActionColor[]).map((color) => (
+            <button
+              key={color}
+              type="button"
+              className={action.color === color ? "is-active" : ""}
+              style={{ "--swatch-color": color === "plain" ? "#f8f8f5" : ACTION_COLOR_VALUES[color] } as CSSProperties}
+              aria-label={`Use ${color} color`}
+              aria-pressed={action.color === color}
+              title={color === "plain" ? "No color" : color[0].toUpperCase() + color.slice(1)}
+              onClick={(event) => { event.stopPropagation(); if (color !== action.color) onColorChange(color); }}
+            />
+          ))}
+        </div>
+      )}
       <button
         className="completion-button"
         type="button"
@@ -266,8 +313,14 @@ function ActionItem({
         aria-pressed={action.completed}
         onClick={onComplete}
       >
-        <span aria-hidden="true"><svg viewBox="0 0 16 16" fill="none"><path d="m3.5 8 3 3 6-6" /></svg></span>
+        <span className="completion-mark" aria-hidden="true"><svg viewBox="0 0 16 16" fill="none"><path d="m3.5 8 3 3 6-6" /></svg></span>
+        {celebrating && <span className="completion-burst" aria-hidden="true">
+          {[[0, -24], [21, -12], [21, 12], [0, 24], [-21, 12], [-21, -12]].map(([x, y], index) => (
+            <i key={index} style={{ "--burst-x": `${x}px`, "--burst-y": `${y}px`, "--burst-delay": `${index * 14}ms` } as CSSProperties} />
+          ))}
+        </span>}
       </button>
+      {celebrating && <span className="completion-wash" aria-hidden="true" />}
     </div>
   );
 }
@@ -1153,6 +1206,7 @@ export default function App() {
         setSelectedId(action.id);
       },
       onComplete: () => updateAction(action.id, { completed: !action.completed }),
+      onColorChange: (color: ActionColor) => updateAction(action.id, { color }),
       onContextMenu: (x: number, y: number) => setContextMenu({ id: action.id, x, y }),
       onDragStart: () => {
         const ids = selectedActionIds.has(action.id)
@@ -1363,15 +1417,15 @@ export default function App() {
                   const key = toDateKey(day);
                   const isOutside = day.getMonth() !== month;
                   const completedCount = isOutside ? 0 : completedByDate.get(key) ?? 0;
-                  const completionSize = completedCount === 0
-                    ? 0
-                    : 18 + Math.sqrt(completedCount / maximumCompleted) * 8;
+                  // Bubble area, rather than an almost-fixed diameter, represents volume.
+                  const completionScale = Math.sqrt(completedCount / maximumCompleted);
                   return (
                     <button
                       key={key}
                       type="button"
                       className={`${isOutside ? "is-outside" : ""} ${completedCount ? "has-completions" : ""}`}
-                      style={{ "--completion-size": `${completionSize}px` } as CSSProperties}
+                      style={{ "--completion-scale": completionScale } as CSSProperties}
+                      data-completed-count={completedCount}
                       title={`${completedCount} completed ${completedCount === 1 ? "action" : "actions"} on ${prettyDate(key)}`}
                       aria-label={`${prettyDate(key)}: ${completedCount} completed ${completedCount === 1 ? "action" : "actions"}`}
                       disabled={isOutside}
@@ -1380,7 +1434,7 @@ export default function App() {
                         setView("week");
                       }}
                     >
-                      {completedCount > 0 && <i aria-hidden="true">{completedCount}</i>}
+                      {completedCount > 0 && <><i aria-hidden="true" /><span className="completion-count" aria-hidden="true">{completedCount}</span></>}
                     </button>
                   );
                 })}
