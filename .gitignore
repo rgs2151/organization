@@ -7,3 +7,4 @@ dist/
 !.env.example
 var/*
 !var/.gitkeep
+.taste-skill/

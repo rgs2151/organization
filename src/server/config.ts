@@ -78,6 +78,9 @@ export const config = {
   authMode,
   authentikAppSlug: process.env.ORGANIZATION_AUTHENTIK_APP_SLUG ?? "organization",
   publicOrigin,
+  browserSessionRenewalUrl: process.env.ORGANIZATION_OAUTH_ISSUER
+    ? new URL("/api/v3/core/users/me/", process.env.ORGANIZATION_OAUTH_ISSUER).href
+    : undefined,
   oauth: resolveOAuthConfig(),
   developmentUser: {
     id: process.env.ORGANIZATION_DEV_USER_ID ?? "dev-rudra",

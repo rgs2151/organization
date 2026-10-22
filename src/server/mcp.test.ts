@@ -100,6 +100,7 @@ test("Organization MCP authenticates a revocable owner credential and uses appli
     ["actions_move", "id"],
     ["actions_move", "beforeId"],
     ["action_note_append", "id"],
+    ["action_note_update", "id"],
     ["actions_delete", "id"],
   ] as const;
   for (const [toolName, fieldName] of actionIdFields) {
@@ -166,6 +167,32 @@ test("Organization MCP authenticates a revocable owner credential and uses appli
     action: { id: string; revision: number };
   }).action;
   assert.ok(createdAction.id);
+
+  for (const id of [createdAction.id, importedActionId]) {
+    const original = actions.get(owner.id, id);
+    const note = { type: "doc", content: [
+      { type: "paragraph", content: [{ type: "text", text: "Existing note", marks: [{ type: "bold" }] }] },
+      { type: "image", attrs: { src: "/api/attachments/test-image", alt: "Keep image" } },
+    ] };
+    const replaced = await client.callTool({ name: "action_note_update", arguments: { id, expectedRevision: original.revision, note } });
+    assert.equal(replaced.isError, undefined);
+    let saved = actions.get(owner.id, id);
+    const edited = await client.callTool({ name: "action_note_update", arguments: {
+      id, expectedRevision: saved.revision, edits: [{ find: "Existing", replace: "Edited" }],
+    } });
+    assert.equal(edited.isError, undefined);
+    assert.deepEqual(actions.get(owner.id, id).note.content?.[1], note.content[1]);
+    assert.deepEqual(actions.get(owner.id, id).note.content?.[0].content?.[0].marks, [{ type: "bold" }]);
+    const stale = await client.callTool({ name: "action_note_update", arguments: { id, expectedRevision: saved.revision, note } });
+    assert.equal(stale.isError, true);
+    assert.match(JSON.stringify(stale.content), /changed/);
+    saved = actions.get(owner.id, id);
+    assert.equal(saved.note.content?.[0].content?.[0].text, "Edited note");
+    const missingRevision = await client.callTool({ name: "action_note_update", arguments: { id, note } });
+    assert.equal(missingRevision.isError, true);
+  }
+  createdAction = actions.get(owner.id, createdAction.id);
+  importedAction = actions.get(owner.id, importedActionId);
 
   const createdGetResult = await client.callTool({
     name: "actions_get",

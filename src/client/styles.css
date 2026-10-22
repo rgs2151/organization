@@ -28,9 +28,7 @@ body {
   margin: 0;
   min-width: 320px;
   min-height: 100vh;
-  background:
-    radial-gradient(circle at 88% 4%, rgba(203, 198, 255, 0.22), transparent 21rem),
-    var(--paper);
+  background: var(--paper);
 }
 
 button,
@@ -148,7 +146,7 @@ textarea:focus-visible {
   min-width: 68px;
   padding: 8px 12px;
   background: transparent;
-  color: #777772;
+  color: #666660;
   font-size: 12px;
   font-weight: 720;
 }
@@ -156,7 +154,7 @@ textarea:focus-visible {
 .primary-tabs button.is-active {
   background: var(--accent-soft);
   color: #30304d;
-  box-shadow: 0 1px 4px rgba(62, 59, 117, 0.13);
+  box-shadow: none;
 }
 
 .account-menu {
@@ -194,7 +192,7 @@ textarea:focus-visible {
   place-items: center;
   border: 1px solid rgba(92, 84, 189, 0.18);
   border-radius: 50%;
-  background: linear-gradient(145deg, #ddd9ff, #b9f0d0);
+  background: #d9e9df;
   color: #34334c;
   font-size: 12px;
   font-weight: 850;
@@ -222,7 +220,7 @@ textarea:focus-visible {
 
 .account-popover > span {
   margin-top: 3px;
-  color: #898983;
+  color: #64645e;
   font-size: 11px;
 }
 
@@ -316,7 +314,7 @@ textarea:focus-visible {
   border-radius: 999px;
   padding: 8px 12px;
   background: transparent;
-  color: #767670;
+  color: #65655f;
   font-size: 12px;
   font-weight: 720;
   text-transform: capitalize;
@@ -330,7 +328,7 @@ textarea:focus-visible {
 .view-switch button.is-active {
   background: var(--accent-soft);
   color: #30304d;
-  box-shadow: 0 1px 4px rgba(62, 59, 117, 0.13);
+  box-shadow: none;
 }
 
 .today-button {
@@ -367,7 +365,8 @@ textarea:focus-visible {
 
 .week-scroll {
   overflow-x: auto;
-  padding-bottom: 8px;
+  margin-inline: -12px;
+  padding: 0 12px 56px;
   scrollbar-width: thin;
 }
 
@@ -414,8 +413,10 @@ textarea:focus-visible {
 }
 
 .day-actions {
+  padding-inline: 5px;
+  margin-inline: -5px;
   min-height: calc(var(--week-action-rows) * 54px + 30px);
-  background: repeating-linear-gradient(
+  background: repeating-linear-gradient( /* taste-skill-ignore: functional ruled lines in the weekly calendar, not a decorative fill */
     to bottom,
     transparent 0,
     transparent 53px,
@@ -518,6 +519,7 @@ html.is-marquee-selecting * {
 }
 
 .completion-button {
+  position: relative;
   display: grid;
   width: 31px;
   flex: 0 0 31px;
@@ -536,8 +538,38 @@ html.is-marquee-selecting * {
   color: white;
   font-size: 10px;
   font-weight: 900;
-  transition: background 180ms ease, border 180ms ease, transform 180ms cubic-bezier(.2,.9,.3,1.5);
+  transition: background 160ms ease, border-color 160ms ease, transform 140ms ease-out;
 }
+
+.completion-button svg {
+  width: 100%;
+  height: 100%;
+  stroke: currentColor;
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  opacity: 0;
+}
+
+.action-item.is-complete .completion-button svg { opacity: 1; }
+.action-item.is-celebrating .completion-button span { animation: completion-stamp 340ms cubic-bezier(.22,1,.36,1); }
+.action-item.is-celebrating .completion-button svg { animation: completion-ink 300ms ease-out; }
+.action-item.is-celebrating { animation: completion-settle 520ms ease-out; }
+.action-item.is-celebrating .completion-button::after {
+  position: absolute;
+  width: 24px;
+  height: 24px;
+  border: 2px solid var(--green);
+  border-radius: 50%;
+  content: "";
+  pointer-events: none;
+  animation: completion-ring 460ms cubic-bezier(.22,1,.36,1) forwards;
+}
+
+@keyframes completion-stamp { from { transform: scale(.72); } to { transform: scale(1); } }
+@keyframes completion-ring { from { opacity: .65; transform: scale(.6); } to { opacity: 0; transform: scale(1.9); } }
+@keyframes completion-ink { from { stroke-dasharray: 14; stroke-dashoffset: 14; } to { stroke-dasharray: 14; stroke-dashoffset: 0; } }
+@keyframes completion-settle { from { opacity: 1; } to { opacity: .68; } }
 
 .completion-button:hover span {
   border-color: var(--green);
@@ -546,7 +578,6 @@ html.is-marquee-selecting * {
 .action-item.is-complete .completion-button span {
   border-color: var(--green);
   background: var(--green);
-  animation: completion-pop 260ms cubic-bezier(.2,.9,.3,1.45);
 }
 
 .action-item.is-complete .action-title {
@@ -687,7 +718,7 @@ html.is-marquee-selecting * {
 
 .action-item.is-bucket .action-title {
   max-width: 270px;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 650;
 }
 
@@ -772,6 +803,12 @@ html.is-marquee-selecting * {
   background: rgba(255, 255, 255, 0.5);
 }
 
+.month-day.is-drop-empty {
+  outline: 2px solid var(--accent);
+  outline-offset: -3px;
+  background-color: var(--accent-soft);
+}
+
 .month-day:nth-child(7n) {
   border-right: 0;
 }
@@ -830,6 +867,11 @@ html.is-marquee-selecting * {
   box-shadow: 0 0 0 2px #796cf0, 0 4px 12px rgba(84, 72, 185, 0.14);
 }
 
+.action-item.is-bucket.is-selected {
+  z-index: 2;
+  box-shadow: 0 0 0 2px #796cf0;
+}
+
 .action-item.is-compact .action-open {
   align-items: flex-start;
   padding: 6px 2px 6px 6px;
@@ -838,7 +880,7 @@ html.is-marquee-selecting * {
 .action-item.is-compact .action-title {
   display: -webkit-box;
   overflow: hidden;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 680;
   line-height: 1.18;
   -webkit-box-orient: vertical;
@@ -913,7 +955,7 @@ html.is-marquee-selecting * {
 .mini-weekdays span {
   padding-bottom: 4px;
   color: #a3a39d;
-  font-size: 8px;
+  font-size: 11px;
   font-weight: 700;
   text-align: center;
 }
@@ -924,6 +966,8 @@ html.is-marquee-selecting * {
   aspect-ratio: 1;
   place-items: center;
   border: 0;
+  padding: 2px;
+  min-width: 0;
   border-radius: 4px;
   background: transparent;
 }
@@ -937,10 +981,19 @@ html.is-marquee-selecting * {
 }
 
 .mini-days button i {
-  width: var(--completion-size);
-  height: var(--completion-size);
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: min(var(--completion-size), 100%);
+  height: auto;
+  aspect-ratio: 1;
   border-radius: 50%;
-  background: #36aa70;
+  background: #238650;
+  color: white;
+  font-size: 11px;
+  font-weight: 650;
+  font-style: normal;
+  font-variant-numeric: tabular-nums;
   box-shadow: 0 0 0 1px rgba(21, 112, 67, 0.08);
   transition: transform 140ms ease, background 140ms ease;
 }
@@ -1242,11 +1295,7 @@ html.is-marquee-selecting * {
 }
 
 .rich-note-loading {
-  background:
-    linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.5), transparent),
-    rgba(255, 255, 255, 0.36);
-  background-size: 220% 100%;
-  animation: note-loading 1.2s ease infinite;
+  background: rgba(255, 255, 255, 0.36);
 }
 
 .rich-note-toolbar {
@@ -1501,13 +1550,49 @@ html.is-marquee-selecting * {
 }
 
 .delete-action {
-  border: 0;
-  padding: 9px 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 36px;
+  border: 1px solid #dfc9ce;
+  border-radius: 7px;
+  padding: 8px 11px;
   background: transparent;
-  color: #9b5d68;
+  color: #963d4b;
   font-size: 12px;
   font-weight: 700;
 }
+
+.delete-action:hover { background: #faecee; border-color: #cda5ae; }
+
+.action-context-menu {
+  position: fixed;
+  z-index: 120;
+  width: 224px;
+  padding: 5px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+  box-shadow: 0 8px 28px rgb(21 21 21 / 14%);
+  animation: context-menu-in 150ms ease-out;
+}
+.action-context-menu button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 36px;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  font-size: 13px;
+  text-align: left;
+}
+.action-context-menu button:hover, .action-context-menu button:focus-visible { background: #efefeb; outline: none; }
+.action-context-menu .is-destructive { margin-top: 4px; color: #963d4b; }
+.action-context-menu .is-destructive:hover, .action-context-menu .is-destructive:focus-visible { background: #faecee; }
+@keyframes context-menu-in { from { opacity: 0; transform: translateY(-3px); } to { opacity: 1; transform: none; } }
 
 .complete-action {
   display: flex;
@@ -1708,7 +1793,7 @@ html.is-marquee-selecting * {
   place-items: center;
   border: 1px solid rgba(92, 84, 189, 0.18);
   border-radius: 50%;
-  background: linear-gradient(145deg, #ddd9ff, #b9f0d0);
+  background: #d9e9df;
   color: #34334c;
   font-size: 14px;
   font-weight: 850;
@@ -2101,7 +2186,7 @@ html.is-marquee-selecting * {
 
 @media (max-width: 660px) {
   .app-shell {
-    padding-inline: 14px;
+    padding-inline: 16px;
   }
 
   .topbar {
@@ -2162,11 +2247,12 @@ html.is-marquee-selecting * {
     max-width: 100%;
   }
 
-  .someday-heading,
   .activity-heading {
     align-items: flex-start;
     flex-direction: column;
   }
+
+  .someday-heading { align-items: center; flex-direction: row; }
 
   .activity-card {
     grid-template-columns: minmax(760px, 1fr) 105px;

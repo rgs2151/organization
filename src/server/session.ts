@@ -6,6 +6,7 @@ type SessionConfig = {
   authMode: "development" | "authentik-proxy";
   authentikAppSlug: string;
   developmentUser: OrganizationUser;
+  browserSessionRenewalUrl?: string;
 };
 
 export class SessionResolver {
@@ -36,7 +37,7 @@ export class SessionResolver {
       ?? cleanHeader(request, "x-authentik-username", 200)
       ?? email;
     const user = this.repository.ensureAuthenticatedUser({ subject, email, displayName });
-    return { user, mode: "authenticated" };
+    return { user, mode: "authenticated", ...(this.config.browserSessionRenewalUrl ? { renewalUrl: this.config.browserSessionRenewalUrl } : {}) };
   }
 }
 

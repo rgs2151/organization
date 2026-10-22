@@ -9,7 +9,11 @@ Organization exposes one unified, application-owned MCP endpoint at `https://org
 - `actions_list` and `actions_get`: bounded owner-scoped reads.
 - `actions_create`, `actions_update`, and `actions_move`: normal application writes and ordering.
 - `action_note_append`: preserve existing rich content while appending agent-authored text.
-- `actions_delete`: explicit permanent deletion, annotated as destructive.
+- `action_note_update`: edit unique text passages in place, preserving formatting,
+  headings, checklists and images; or intentionally replace the complete structured
+  note. Requires the revision returned by the latest read. Supply either `edits`
+  (`find`/`replace` pairs) or `note` (a complete Tiptap document), never both.
+- `actions_delete`: move to trash, retaining the database record, annotated as destructive.
 - `activity_get`: daily completion totals for one year.
 
 Journal, goals, reflection sessions, and future modules belong on this same endpoint. They are not advertised until their data models exist.
@@ -31,6 +35,13 @@ Actions carry monotonically increasing revisions. MCP writers can submit the rev
 
 ## Agent behavior
 
-The server instructions tell clients to read relevant context before broad planning, preview broad reorganizations, apply explicit single-action requests directly, preserve the user's words, label interpretations as hypotheses, and use permanent deletion only on explicit request.
+The server instructions tell clients to read relevant context before broad planning, preview broad reorganizations, apply explicit single-action requests directly, preserve the user's words, label interpretations as hypotheses, and delete only on explicit request.
+
+For note edits, first call `actions_get`. Use a unique exact passage in `edits`
+for targeted corrections, including passages spanning differently formatted text.
+Unmatched or ambiguous text fails without saving; stale revisions fail without
+overwriting the newer document. Full `note` replacement is deliberate: include
+all existing blocks and attachments that should remain. Existing tool names,
+credential hashes and OAuth configuration are unchanged by adding this tool.
 
 The conversational agent conducts reflection. MCP supplies durable context and operations; it does not initiate unsolicited conversations or impersonate the user.

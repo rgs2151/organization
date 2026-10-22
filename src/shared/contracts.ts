@@ -11,6 +11,7 @@ export type OrganizationUser = {
 export type OrganizationSession = {
   user: OrganizationUser;
   mode: "development" | "authenticated";
+  renewalUrl?: string;
 };
 
 export type RichTextNode = {

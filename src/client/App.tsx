@@ -13,6 +13,7 @@ import {
   type PointerEvent as ReactPointerEvent,
 } from "react";
 import * as api from "./api";
+import { ActionPatchQueue } from "./action-patch-queue";
 import SettingsPage from "./SettingsPage";
 import {
   type ActionPlacement,
@@ -188,6 +189,7 @@ function ActionItem({
   onDragEnd,
   onDragPosition,
   onDropAt,
+  onContextMenu,
 }: {
   action: CalendarAction;
   compact?: boolean;
@@ -202,17 +204,36 @@ function ActionItem({
   onDragEnd: () => void;
   onDragPosition: (event: DragEvent<HTMLDivElement>) => void;
   onDropAt: (event: DragEvent<HTMLDivElement>, draggedIds: string[]) => void;
+  onContextMenu: (x: number, y: number) => void;
 }) {
+  const [celebrating, setCelebrating] = useState(false);
+  const previousCompleted = useRef(action.completed);
+  useEffect(() => {
+    if (action.completed && !previousCompleted.current) setCelebrating(true);
+    previousCompleted.current = action.completed;
+  }, [action.completed]);
   const style = {
     "--action-color": ACTION_COLOR_VALUES[action.color],
   } as CSSProperties;
 
   return (
     <div
-      className={`action-item ${compact ? "is-compact" : ""} ${bucket ? "is-bucket" : ""} ${isDragging ? "is-dragging" : ""} ${isSelected ? "is-selected" : ""} ${dropBefore ? "is-drop-before" : ""} ${dropAfter ? "is-drop-after" : ""} ${action.completed ? "is-complete" : ""}`}
+      className={`action-item ${compact ? "is-compact" : ""} ${bucket ? "is-bucket" : ""} ${isDragging ? "is-dragging" : ""} ${isSelected ? "is-selected" : ""} ${dropBefore ? "is-drop-before" : ""} ${dropAfter ? "is-drop-after" : ""} ${action.completed ? "is-complete" : ""} ${celebrating ? "is-celebrating" : ""}`}
       data-action-id={action.id}
       aria-selected={isSelected}
       draggable
+      onContextMenu={(event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        onContextMenu(event.clientX, event.clientY);
+      }}
+      onKeyDown={(event) => {
+        if (event.key !== "ContextMenu" && !(event.shiftKey && event.key === "F10")) return;
+        event.preventDefault();
+        const bounds = event.currentTarget.getBoundingClientRect();
+        onContextMenu(bounds.left + 12, bounds.bottom);
+      }}
+      onAnimationEnd={(event) => { if (event.animationName === "completion-settle") setCelebrating(false); }}
       onDragStart={(event) => {
         const actionIds = onDragStart(event);
         event.dataTransfer.effectAllowed = "move";
@@ -245,7 +266,7 @@ function ActionItem({
         aria-pressed={action.completed}
         onClick={onComplete}
       >
-        <span aria-hidden="true">{action.completed ? "✓" : ""}</span>
+        <span aria-hidden="true"><svg viewBox="0 0 16 16" fill="none"><path d="m3.5 8 3 3 6-6" /></svg></span>
       </button>
     </div>
   );
@@ -366,13 +387,7 @@ function ActionPage({
           <button className="quiet-icon" type="button" onClick={onClose} aria-label="Close action page">×</button>
         </header>
 
-        <input
-          id="action-page-title"
-          className="action-page-title"
-          value={action.title}
-          onChange={(event) => onChange({ title: event.target.value })}
-          aria-label="Action title"
-        />
+        <ActionTitleInput key={action.id} title={action.title} onChange={(title) => onChange({ title })} />
 
         <Suspense fallback={<div className="rich-note rich-note-loading" aria-label="Loading notes" />}>
           <RichNoteEditor
@@ -383,19 +398,109 @@ function ActionPage({
         </Suspense>
 
         <footer className="action-page-footer">
-          <button className="delete-action" type="button" onClick={onDelete}>Delete</button>
+          <button className="delete-action" type="button" onClick={onDelete}>
+            <TrashIcon /> Delete action
+          </button>
           <button
             className={`complete-action ${action.completed ? "is-complete" : ""}`}
             type="button"
             onClick={() => onChange({ completed: !action.completed })}
           >
-            <span>{action.completed ? "✓" : ""}</span>
+            <span>{action.completed && <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m3.5 8 3 3 6-6" /></svg>}</span>
             {action.completed ? "Completed" : "Mark complete"}
           </button>
         </footer>
       </section>
     </div>
   );
+}
+
+function TrashIcon() {
+  return <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M3 6h18M9 6V3h6v3M5 6l1 15h12l1-15M10 10v7M14 10v7" /></svg>;
+}
+
+function ActionContextMenu({ x, y, action, onOpen, onComplete, onUnscheduled, onDelete }: {
+  x: number;
+  y: number;
+  action: CalendarAction;
+  onOpen: () => void;
+  onComplete: () => void;
+  onUnscheduled: () => void;
+  onDelete: () => void;
+}) {
+  const menu = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const previous = document.activeElement as HTMLElement | null;
+    menu.current?.querySelector<HTMLButtonElement>("button")?.focus();
+    return () => { if (previous?.isConnected) previous.focus({ preventScroll: true }); };
+  }, []);
+  return <div
+    ref={menu}
+    className="action-context-menu"
+    role="menu"
+    aria-label="Action options"
+    style={{ left: Math.max(8, Math.min(x, window.innerWidth - 232)), top: Math.max(8, Math.min(y, window.innerHeight - 200)) }}
+    onPointerDown={(event) => event.stopPropagation()}
+    onContextMenu={(event) => event.preventDefault()}
+    onKeyDown={(event) => {
+      const buttons = Array.from(menu.current?.querySelectorAll<HTMLButtonElement>("button") ?? []);
+      const current = buttons.indexOf(document.activeElement as HTMLButtonElement);
+      let next: number | undefined;
+      if (event.key === "ArrowDown") next = (current + 1) % buttons.length;
+      if (event.key === "ArrowUp") next = (current - 1 + buttons.length) % buttons.length;
+      if (event.key === "Home") next = 0;
+      if (event.key === "End") next = buttons.length - 1;
+      if (next !== undefined) { event.preventDefault(); buttons[next]?.focus(); }
+    }}
+  >
+    <button role="menuitem" type="button" onClick={onOpen}>Edit action</button>
+    <button role="menuitem" type="button" onClick={onComplete}>{action.completed ? "Mark incomplete" : "Mark complete"}</button>
+    {action.date && <button role="menuitem" type="button" onClick={onUnscheduled}>Move to Someday</button>}
+    <button role="menuitem" className="is-destructive" type="button" onClick={onDelete}><TrashIcon /> Delete action</button>
+  </div>;
+}
+
+function ActionTitleInput({ title, onChange }: { title: string; onChange: (title: string) => void }) {
+  const [draft, setDraft] = useState(title);
+  const latest = useRef({ draft: title, title, onChange, dirty: false, focused: false });
+  const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  latest.current.onChange = onChange;
+  latest.current.title = title;
+  function flush() {
+    clearTimeout(timer.current);
+    const state = latest.current;
+    if (!state.dirty) return;
+    if (!state.draft.trim()) {
+      if (state.focused) return;
+      setDraft(state.title);
+      state.draft = state.title;
+    } else state.onChange(state.draft);
+    state.dirty = false;
+  }
+  useEffect(() => {
+    if (!latest.current.dirty && !latest.current.focused) {
+      latest.current.draft = title;
+      setDraft(title);
+    }
+  }, [title]);
+  useEffect(() => () => { latest.current.focused = false; flush(); }, []);
+  return <input
+    id="action-page-title"
+    className="action-page-title"
+    value={draft}
+    maxLength={500}
+    aria-label="Action title"
+    onFocus={() => { latest.current.focused = true; }}
+    onBlur={() => { latest.current.focused = false; flush(); }}
+    onChange={(event) => {
+      const value = event.target.value;
+      latest.current.draft = value;
+      latest.current.dirty = true;
+      setDraft(value);
+      clearTimeout(timer.current);
+      timer.current = setTimeout(flush, 350);
+    }}
+  />;
 }
 
 function ActivityHeatmap({
@@ -525,16 +630,27 @@ export default function App() {
   const [draggedIds, setDraggedIds] = useState<string[]>([]);
   const [dropTarget, setDropTarget] = useState<DropTarget | null>(null);
   const [marqueeBox, setMarqueeBox] = useState<MarqueeBox | null>(null);
-  const pendingPatches = useRef(new Map<string, UpdateActionInput>());
+  const [contextMenu, setContextMenu] = useState<{ id: string; x: number; y: number } | null>(null);
+  const suppressClick = useRef(false);
+  const patchQueue = useRef<ActionPatchQueue | null>(null);
+  if (!patchQueue.current) {
+    patchQueue.current = new ActionPatchQueue(api.updateAction, (saved) => {
+      setActions((current) => current.map((action) => action.id === saved.id
+        ? action.revision > saved.revision ? patchQueue.current!.overlay(action) : saved
+        : action));
+      setServerError(null);
+    });
+  }
   const patchTimers = useRef(new Map<string, number>());
   const lastSuccessfulSync = useRef(0);
+  const lastIdentityRenewal = useRef(0);
+  const lastInteraction = useRef(Date.now());
   const synchronization = useRef<Promise<boolean> | null>(null);
   const reconnecting = useRef(false);
   const marqueeCleanup = useRef<(() => void) | null>(null);
   const actionsRef = useRef<CalendarAction[]>(actions);
   const undoStack = useRef<UndoEntry[]>([]);
   const undoing = useRef(false);
-  const patchRequests = useRef(new Map<string, Promise<void>>());
   actionsRef.current = actions;
 
   useEffect(() => {
@@ -558,6 +674,14 @@ export default function App() {
     window.addEventListener("online", synchronizeAfterResume);
     window.addEventListener("pageshow", synchronizeAfterResume);
     document.addEventListener("visibilitychange", synchronizeAfterResume);
+    const noteInteraction = () => { lastInteraction.current = Date.now(); };
+    window.addEventListener("pointerdown", noteInteraction);
+    window.addEventListener("keydown", noteInteraction);
+    window.addEventListener("focus", noteInteraction);
+    // Keep a visible, actively used tab current without keeping an unattended tab alive.
+    const activitySync = window.setInterval(() => {
+      if (Date.now() - lastInteraction.current <= 30 * 60_000) synchronizeAfterResume();
+    }, 5 * 60_000);
 
     return () => {
       active = false;
@@ -568,8 +692,26 @@ export default function App() {
       window.removeEventListener("online", synchronizeAfterResume);
       window.removeEventListener("pageshow", synchronizeAfterResume);
       document.removeEventListener("visibilitychange", synchronizeAfterResume);
+      window.clearInterval(activitySync);
+      window.removeEventListener("pointerdown", noteInteraction);
+      window.removeEventListener("keydown", noteInteraction);
+      window.removeEventListener("focus", noteInteraction);
     };
   }, []);
+
+  useEffect(() => {
+    if (!contextMenu) return;
+    const dismiss = () => setContextMenu(null);
+    const escape = (event: KeyboardEvent) => { if (event.key === "Escape") dismiss(); };
+    window.addEventListener("pointerdown", dismiss);
+    window.addEventListener("keydown", escape);
+    window.addEventListener("scroll", dismiss, true);
+    return () => {
+      window.removeEventListener("pointerdown", dismiss);
+      window.removeEventListener("keydown", escape);
+      window.removeEventListener("scroll", dismiss, true);
+    };
+  }, [contextMenu]);
 
   useEffect(() => {
     const handleUndoShortcut = (event: KeyboardEvent) => {
@@ -644,10 +786,12 @@ export default function App() {
     const target = event.target as HTMLElement;
     if (!target.closest(".selection-surface")) return;
     if (target.closest(".action-item, .action-composer, button, input, textarea, a")) return;
+    // Prevent browser text/image dragging from stealing a gutter selection gesture.
+    event.preventDefault();
 
     marqueeCleanup.current?.();
-    const startX = event.clientX;
-    const startY = event.clientY;
+    const startX = event.clientX + window.scrollX;
+    const startY = event.clientY + window.scrollY;
     const additive = event.metaKey || event.ctrlKey;
     const baseSelection = additive ? new Set(selectedActionIds) : new Set<string>();
     let active = false;
@@ -662,16 +806,18 @@ export default function App() {
     };
 
     const move = (pointerEvent: PointerEvent) => {
-      const distance = Math.hypot(pointerEvent.clientX - startX, pointerEvent.clientY - startY);
+      const pointerX = pointerEvent.clientX + window.scrollX;
+      const pointerY = pointerEvent.clientY + window.scrollY;
+      const distance = Math.hypot(pointerX - startX, pointerY - startY);
       if (!active && distance < 5) return;
       active = true;
       pointerEvent.preventDefault();
       document.documentElement.classList.add("is-marquee-selecting");
 
-      const left = Math.min(startX, pointerEvent.clientX);
-      const top = Math.min(startY, pointerEvent.clientY);
-      const right = Math.max(startX, pointerEvent.clientX);
-      const bottom = Math.max(startY, pointerEvent.clientY);
+      const left = Math.min(startX, pointerX) - window.scrollX;
+      const top = Math.min(startY, pointerY) - window.scrollY;
+      const right = Math.max(startX, pointerX) - window.scrollX;
+      const bottom = Math.max(startY, pointerY) - window.scrollY;
       setMarqueeBox({ left, top, width: right - left, height: bottom - top });
 
       const nextSelection = new Set(baseSelection);
@@ -686,6 +832,10 @@ export default function App() {
     };
 
     const finish = () => {
+      if (active) {
+        suppressClick.current = true;
+        window.setTimeout(() => { suppressClick.current = false; }, 0);
+      }
       if (!active && !additive) setSelectedActionIds(new Set());
       cleanup();
     };
@@ -752,7 +902,7 @@ export default function App() {
         }
       : action));
 
-    pendingPatches.current.set(id, { ...pendingPatches.current.get(id), ...patch });
+    patchQueue.current!.enqueue(id, patch);
     const existingTimer = patchTimers.current.get(id);
     if (existingTimer) window.clearTimeout(existingTimer);
     const timer = window.setTimeout(() => {
@@ -766,24 +916,11 @@ export default function App() {
     if (timer) window.clearTimeout(timer);
     patchTimers.current.delete(id);
 
-    const previousRequest = patchRequests.current.get(id) ?? Promise.resolve();
-    const request = previousRequest.catch(() => undefined).then(async () => {
-      const pending = pendingPatches.current.get(id);
-      pendingPatches.current.delete(id);
-      if (!pending) return;
-      const saved = await api.updateAction(id, pending);
-      setActions((current) => current.map((action) => action.id === id ? saved : action));
-      setServerError(null);
-    });
-    patchRequests.current.set(id, request);
     try {
-      await request;
+      await patchQueue.current!.flush(id);
     } catch (error) {
-      undoStack.current = [];
-      if (!handleApplicationError(error)) void reloadApplication();
+      handleApplicationError(error);
       throw error;
-    } finally {
-      if (patchRequests.current.get(id) === request) patchRequests.current.delete(id);
     }
   }
 
@@ -791,7 +928,21 @@ export default function App() {
     const timer = patchTimers.current.get(id);
     if (timer) window.clearTimeout(timer);
     patchTimers.current.delete(id);
-    pendingPatches.current.delete(id);
+    patchQueue.current!.discard(id);
+  }
+
+  function deleteAction(id: string) {
+    const placement = placementFor(id, actionsRef.current);
+    setContextMenu(null);
+    setActions((current) => current.filter((action) => action.id !== id));
+    setSelectedActionIds((current) => new Set([...current].filter((candidate) => candidate !== id)));
+    if (selectedId === id) setSelectedId(null);
+    void flushPendingPatch(id)
+      .then(() => api.deleteAction(id))
+      .then(() => pushUndo({ kind: "delete", id, ...(placement?.beforeId ? { beforeId: placement.beforeId } : {}) }))
+      .catch((error: unknown) => {
+        if (!handleApplicationError(error)) void reloadApplication();
+      });
   }
 
   function moveActionsLocally(actionIds: string[], targetDate: string | null, beforeId?: string) {
@@ -827,7 +978,13 @@ export default function App() {
     const pending = api.loadApplication()
       .then((application) => {
         setSession(application.session);
-        setActions(application.actions);
+        if (application.session.renewalUrl && Date.now() - lastIdentityRenewal.current > 5 * 60_000) {
+          lastIdentityRenewal.current = Date.now();
+          void api.renewBrowserSession(application.session.renewalUrl).catch(() => {
+            lastIdentityRenewal.current = 0;
+          });
+        }
+        reconcileServerActions(application.actions);
         setServerError(null);
         lastSuccessfulSync.current = Date.now();
         return true;
@@ -847,6 +1004,16 @@ export default function App() {
     if (api.isAuthenticationRequired(error)) return true;
     setServerError(errorMessage(error));
     return false;
+  }
+
+  function reconcileServerActions(saved: CalendarAction[]) {
+    setActions((current) => {
+      const local = new Map(current.map((action) => [action.id, action]));
+      return saved.map((action) => {
+        const existing = local.get(action.id);
+        return patchQueue.current!.overlay(existing && existing.revision > action.revision ? existing : action);
+      });
+    });
   }
 
   function navigate(direction: -1 | 1) {
@@ -946,7 +1113,7 @@ export default function App() {
     setDropTarget(null);
     void api.moveActions({ ids: orderedIds, date, beforeId })
       .then((savedActions) => {
-        setActions(savedActions);
+        reconcileServerActions(savedActions);
         setServerError(null);
       })
       .catch((error: unknown) => {
@@ -977,6 +1144,7 @@ export default function App() {
       dropBefore: isActiveTarget && dropTarget?.beforeId === action.id,
       dropAfter: isActiveTarget && dropTarget?.beforeId === undefined && lastTargetId === action.id,
       onOpen: (event: ReactMouseEvent<HTMLButtonElement>) => {
+        if (suppressClick.current) return;
         if (event.metaKey || event.ctrlKey || event.shiftKey) {
           toggleActionSelection(action.id);
           return;
@@ -985,6 +1153,7 @@ export default function App() {
         setSelectedId(action.id);
       },
       onComplete: () => updateAction(action.id, { completed: !action.completed }),
+      onContextMenu: (x: number, y: number) => setContextMenu({ id: action.id, x, y }),
       onDragStart: () => {
         const ids = selectedActionIds.has(action.id)
           ? actions.filter((candidate) => selectedActionIds.has(candidate.id)).map((candidate) => candidate.id)
@@ -1067,9 +1236,9 @@ export default function App() {
 
     return (
       <>
-        <div className="week-scroll">
+        <div className="week-scroll selection-surface">
           <section
-            className="week-grid"
+            className="week-grid selection-surface"
             aria-label="Week view"
             style={{ "--week-action-rows": maxActionCount } as CSSProperties}
           >
@@ -1080,6 +1249,8 @@ export default function App() {
                 <article
                   className={`day-column ${key === todayKey ? "is-today" : ""}`}
                   key={key}
+                  onDragOver={(event) => previewContainerDrop(event, key, dayActions, "vertical")}
+                  onDrop={(event) => completeContainerDrop(event, key, dayActions, "vertical")}
                 >
                   <header>
                     <strong>{day.getDate()} {MONTHS[day.getMonth()].slice(0, 3)}</strong>
@@ -1087,8 +1258,6 @@ export default function App() {
                   </header>
                   <div
                     className={`day-actions selection-surface ${dropListClass(key, dayActions)}`}
-                    onDragOver={(event) => previewContainerDrop(event, key, dayActions, "vertical")}
-                    onDrop={(event) => completeContainerDrop(event, key, dayActions, "vertical")}
                     onDoubleClick={(event) => {
                       if ((event.target as HTMLElement).closest(".action-item, .action-composer")) return;
                       const bounds = event.currentTarget.getBoundingClientRect();
@@ -1133,7 +1302,9 @@ export default function App() {
               return (
                 <article
                   key={key}
-                  className={`month-day ${day.getMonth() !== month ? "is-outside" : ""} ${key === todayKey ? "is-today" : ""}`}
+                  className={`month-day selection-surface ${dropListClass(key, dayActions)} ${day.getMonth() !== month ? "is-outside" : ""} ${key === todayKey ? "is-today" : ""}`}
+                  onDragOver={(event) => previewContainerDrop(event, key, dayActions, "vertical")}
+                  onDrop={(event) => completeContainerDrop(event, key, dayActions, "vertical")}
                   onDoubleClick={(event) => {
                     if ((event.target as HTMLElement).closest(".action-item, .action-composer")) return;
                     setComposerTarget({ target: key, index: dayActions.length });
@@ -1144,8 +1315,6 @@ export default function App() {
                   </header>
                   <div
                     className={`month-actions selection-surface ${dropListClass(key, dayActions)}`}
-                    onDragOver={(event) => previewContainerDrop(event, key, dayActions, "vertical")}
-                    onDrop={(event) => completeContainerDrop(event, key, dayActions, "vertical")}
                   >
                     {dayActions.map((action) => (
                       <ActionItem key={action.id} {...actionProps(action, key, dayActions, "vertical", true)} />
@@ -1196,7 +1365,7 @@ export default function App() {
                   const completedCount = isOutside ? 0 : completedByDate.get(key) ?? 0;
                   const completionSize = completedCount === 0
                     ? 0
-                    : 4 + Math.sqrt(completedCount / maximumCompleted) * 10;
+                    : 18 + Math.sqrt(completedCount / maximumCompleted) * 8;
                   return (
                     <button
                       key={key}
@@ -1211,7 +1380,7 @@ export default function App() {
                         setView("week");
                       }}
                     >
-                      {completedCount > 0 && <i aria-hidden="true" />}
+                      {completedCount > 0 && <i aria-hidden="true">{completedCount}</i>}
                     </button>
                   );
                 })}
@@ -1239,7 +1408,9 @@ export default function App() {
   }
 
   return (
-    <main className="app-shell" onPointerDown={beginMarqueeSelection}>
+    <main className="app-shell" onPointerDown={beginMarqueeSelection} onClickCapture={(event) => {
+      if (suppressClick.current) { event.preventDefault(); event.stopPropagation(); }
+    }}>
       <header className="topbar" id="top">
         <nav className="primary-tabs" aria-label="Product sections">
           <button type="button" className={tab === "actions" ? "is-active" : ""} onClick={() => setTab("actions")}>Actions</button>
@@ -1306,21 +1477,23 @@ export default function App() {
           action={selectedAction}
           onClose={() => setSelectedId(null)}
           onChange={(patch) => updateAction(selectedAction.id, patch)}
-          onDelete={() => {
-            const placement = placementFor(selectedAction.id, actionsRef.current);
-            setActions((current) => current.filter((action) => action.id !== selectedAction.id));
-            setSelectedId(null);
-            void flushPendingPatch(selectedAction.id)
-              .then(() => api.deleteAction(selectedAction.id))
-              .then(() => pushUndo({
-                kind: "delete",
-                id: selectedAction.id,
-                ...(placement?.beforeId ? { beforeId: placement.beforeId } : {}),
-              }))
-              .catch((error: unknown) => {
-                if (!handleApplicationError(error)) void reloadApplication();
-              });
+          onDelete={() => deleteAction(selectedAction.id)}
+        />
+      )}
+
+      {contextMenu && actions.some((action) => action.id === contextMenu.id) && (
+        <ActionContextMenu
+          x={contextMenu.x}
+          y={contextMenu.y}
+          action={actions.find((action) => action.id === contextMenu.id)!}
+          onOpen={() => { setSelectedId(contextMenu.id); setContextMenu(null); }}
+          onComplete={() => {
+            const action = actions.find((candidate) => candidate.id === contextMenu.id)!;
+            updateAction(action.id, { completed: !action.completed });
+            setContextMenu(null);
           }}
+          onUnscheduled={() => { completeDrop([contextMenu.id], "someday"); setContextMenu(null); }}
+          onDelete={() => deleteAction(contextMenu.id)}
         />
       )}
 

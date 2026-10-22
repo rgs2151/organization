@@ -3,6 +3,7 @@ import { createMcpHandler, McpServer, type AuthInfo, type CallToolResult } from 
 import * as z from "zod/v4";
 import { ACTION_COLORS, type RichTextDocument, type RichTextNode } from "../shared/contracts.js";
 import { ActionRepository } from "./action-repository.js";
+import { editNoteText } from "./action-note.js";
 import {
   ORGANIZATION_OAUTH_SCOPES,
   type McpOAuthAuthenticator,
@@ -95,7 +96,7 @@ function organizationMcpServer(
   oauth: McpOAuthAuthenticator | null,
 ) {
   const server = new McpServer(
-    { name: "organization", version: "0.8.1" },
+    { name: "organization", version: "0.9.0" },
     {
       instructions: "Organization is the user's unified personal system. Read current context before making broad scheduling changes. Explicit requests such as scheduling one stated action may be applied directly; preview broad reorganizations first. Preserve the user's words in notes, label interpretations as hypotheses, and never claim an MCP write succeeded unless the tool returned success. Revisions prevent stale overwrites. Destructive deletion requires explicit user intent.",
     },
@@ -262,9 +263,33 @@ function organizationMcpServer(
     return { action: repository.update(principal.ownerId, id, { note: appendText(action.note, text) }, expectedRevision) };
   }));
 
+  server.registerTool("action_note_update", {
+    title: "Edit or replace action note",
+    description: "Edit existing note text without losing formatting, checklists or images. Read actions_get first and supply its revision. Provide edits with unique exact passages, or provide the complete structured note document to intentionally replace it. Supply exactly one of edits or note.",
+    inputSchema: z.object({
+      id: ACTION_ID,
+      expectedRevision: z.number().int().positive(),
+      edits: z.array(z.object({
+        find: z.string().min(1).max(100_000),
+        replace: z.string().max(100_000),
+      })).min(1).max(100).optional(),
+      note: z.object({
+        type: z.literal("doc"),
+        content: z.array(z.record(z.string(), z.unknown())),
+      }).optional().describe("Complete Tiptap document; preserve any existing content that should remain"),
+    }),
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
+    _meta: AUTHENTICATED_TOOL_META,
+  }, writeTool("action_note_update", ({ id }) => id, ({ id, expectedRevision, edits, note }) => {
+    if (Boolean(edits) === Boolean(note)) throw new Error("Supply exactly one of edits or note.");
+    const current = repository.get(principal.ownerId, id);
+    const document = edits ? editNoteText(current.note, edits) : note as RichTextDocument;
+    return { action: repository.update(principal.ownerId, id, { note: document }, expectedRevision) };
+  }));
+
   server.registerTool("actions_delete", {
     title: "Delete action",
-    description: "Permanently delete one action. Call only when the user explicitly requested deletion.",
+    description: "Move one action to trash, retaining its data. Call only when the user explicitly requested deletion.",
     inputSchema: z.object({ id: ACTION_ID, expectedRevision: REVISION }),
     annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
     _meta: AUTHENTICATED_TOOL_META,

@@ -71,6 +71,12 @@ export function isAuthenticationRequired(error: unknown): error is Authenticatio
   return error instanceof AuthenticationRequiredError;
 }
 
+export async function renewBrowserSession(url: string) {
+  // Authentik's HttpOnly session stays with the identity provider. This same-site
+  // request renews its rolling expiry; neither cookies nor identity data enter JS.
+  await fetch(url, { mode: "no-cors", credentials: "include", cache: "no-store", redirect: "error" });
+}
+
 function notifyAuthenticationRequired() {
   if (typeof window !== "undefined") {
     window.dispatchEvent(new Event(AUTHENTICATION_REQUIRED_EVENT));

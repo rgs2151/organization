@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import path from "node:path";
+import { config } from "./config.js";
 
 const CONTENT_TYPES: Record<string, string> = {
   ".css": "text/css; charset=utf-8",
@@ -48,9 +49,10 @@ export async function serveClient(
 }
 
 export function applySecurityHeaders(response: ServerResponse) {
+  const identityOrigin = config.browserSessionRenewalUrl ? ` ${new URL(config.browserSessionRenewalUrl).origin}` : "";
   response.setHeader(
     "content-security-policy",
-    "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'",
+    `default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self'${identityOrigin}; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'`,
   );
   response.setHeader("referrer-policy", "same-origin");
   response.setHeader("x-content-type-options", "nosniff");
