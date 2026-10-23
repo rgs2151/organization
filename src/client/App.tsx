@@ -219,12 +219,13 @@ function ActionItem({
   }, [action.completed]);
   const style = {
     "--action-color": ACTION_COLOR_VALUES[action.color],
+    "--action-base-surface": action.color === "plain" ? "#ffffff" : ACTION_COLOR_VALUES[action.color],
     ...(showColors ? { zIndex: 12 } : {}),
   } as CSSProperties;
 
   return (
     <div
-      className={`action-item ${compact ? "is-compact" : ""} ${bucket ? "is-bucket" : ""} ${isDragging ? "is-dragging" : ""} ${isSelected ? "is-selected" : ""} ${dropBefore ? "is-drop-before" : ""} ${dropAfter ? "is-drop-after" : ""} ${action.completed ? "is-complete" : ""} ${celebrating ? "is-celebrating" : ""}`}
+      className={`action-item ${compact ? "is-compact" : ""} ${bucket ? "is-bucket" : ""} ${isDragging ? "is-dragging" : ""} ${isSelected ? "is-selected" : ""} ${dropBefore ? "is-drop-before" : ""} ${dropAfter ? "is-drop-after" : ""} ${action.completed ? "is-complete" : ""} ${celebrating ? "is-celebrating" : ""} ${showColors && !isDragging ? "has-quick-colors" : ""} ${colorsAlignLeft ? "is-color-tools-left" : ""}`}
       data-action-id={action.id}
       aria-selected={isSelected}
       draggable

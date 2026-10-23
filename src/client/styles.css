@@ -428,6 +428,7 @@ textarea:focus-visible {
 
 .action-item {
   --action-color: transparent;
+  --action-surface: var(--action-base-surface, var(--surface));
   position: relative;
   display: flex;
   align-items: stretch;
@@ -607,45 +608,90 @@ html.is-marquee-selecting * {
 }
 
 .action-item.is-complete .action-title {
-  color: #75756f;
+  color: #62625e;
   text-decoration: line-through;
-  text-decoration-color: #71716c;
-  text-decoration-thickness: 1.5px;
+  text-decoration-color: currentColor;
+  text-decoration-thickness: 1px;
 }
 
 .action-item.is-complete {
   opacity: 1;
 }
 
-/* Quick controls float above the card, never moving its text or hit area. */
+/* The color tab grows from the card's edge; it is not a separate floating menu. */
+.action-item.has-quick-colors {
+  border-top-right-radius: 0;
+  outline: 1px solid var(--line);
+  outline-offset: -1px;
+}
+
+.action-item.has-quick-colors.is-color-tools-left {
+  border-top-left-radius: 0;
+  border-top-right-radius: 7px;
+}
+
 .action-quick-colors {
   position: absolute;
   z-index: 4;
   right: 0;
-  bottom: calc(100% - 4px);
+  bottom: calc(100% - 1px);
   display: flex;
   align-items: center;
-  gap: 4px;
-  border: 1px solid #deded8;
-  border-radius: 999px;
-  padding: 6px;
-  background: #fff;
-  box-shadow: 0 3px 10px rgba(32, 32, 27, .1);
+  gap: 2px;
+  border: 1px solid var(--line);
+  border-bottom: 0;
+  border-radius: 7px 7px 0 0;
+  padding: 3px 4px;
+  background: var(--action-surface, var(--surface));
+}
+
+.action-quick-colors::after {
+  position: absolute;
+  right: 0;
+  bottom: -1px;
+  left: 0;
+  height: 2px;
+  background: inherit;
+  content: "";
+  pointer-events: none;
 }
 
 .action-quick-colors button {
-  width: 18px;
-  height: 18px;
-  flex: 0 0 18px;
-  border: 1px solid rgba(32, 32, 27, .15);
-  border-radius: 50%;
+  position: relative;
+  display: grid;
+  width: 20px;
+  height: 20px;
+  flex: 0 0 20px;
+  place-items: center;
+  border: 0;
+  border-radius: 4px;
   padding: 0;
-  background: var(--swatch-color);
-  transition: transform 120ms ease-out, box-shadow 120ms ease-out;
+  background: transparent;
 }
 
-.action-quick-colors button:hover { transform: scale(1.15); }
-.action-quick-colors button.is-active { box-shadow: 0 0 0 2px white, 0 0 0 3px #79796f; }
+.action-quick-colors button::before {
+  width: 15px;
+  height: 15px;
+  border: 1px solid rgba(21, 21, 21, .15);
+  border-radius: 50%;
+  background: var(--swatch-color);
+  content: "";
+  transition: transform 140ms ease-out;
+}
+
+.action-quick-colors button:hover::before { transform: scale(1.12); }
+.action-quick-colors button.is-active::after {
+  position: absolute;
+  top: 5px;
+  left: 8px;
+  width: 4px;
+  height: 7px;
+  border: solid var(--ink);
+  border-width: 0 1.5px 1.5px 0;
+  transform: rotate(45deg);
+  content: "";
+  pointer-events: none;
+}
 .action-quick-colors button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 .action-composer {
@@ -966,7 +1012,8 @@ html.is-marquee-selecting * {
 .action-item.is-complete,
 .action-item.is-bucket.is-complete,
 .month-day .action-item.is-complete {
-  background: #eaeae5;
+  --action-surface: color-mix(in srgb, var(--action-base-surface) 22%, var(--surface));
+  background: var(--action-surface);
 }
 
 .month-day .action-composer input {
