@@ -216,7 +216,6 @@ function ActionItem({
   }, [action.completed]);
   const style = {
     "--action-color": ACTION_COLOR_VALUES[action.color],
-    "--action-base-surface": action.color === "plain" ? "#ffffff" : ACTION_COLOR_VALUES[action.color],
   } as CSSProperties;
 
   return (

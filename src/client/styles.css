@@ -435,7 +435,6 @@ textarea:focus-visible {
 
 .action-item {
   --action-color: transparent;
-  --action-surface: var(--action-base-surface, var(--surface));
   position: relative;
   display: flex;
   align-items: stretch;
@@ -977,8 +976,17 @@ html.is-marquee-selecting * {
 .action-item.is-complete,
 .action-item.is-bucket.is-complete,
 .month-day .action-item.is-complete {
-  --action-surface: color-mix(in srgb, var(--action-base-surface) 22%, var(--surface));
-  background: var(--action-surface);
+  /* Let each calendar/bucket surface show through, including outside-month days. */
+  background: transparent;
+}
+
+.action-item.is-bucket.is-complete,
+.month-day .action-item.is-complete {
+  border-color: transparent;
+}
+
+.action-item.is-complete:not(.is-selected) {
+  box-shadow: none;
 }
 
 .month-day .action-composer-field {
