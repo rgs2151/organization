@@ -426,6 +426,13 @@ textarea:focus-visible {
   cursor: text;
 }
 
+.action-item,
+.action-composer {
+  --action-title-size: 13px;
+  --action-title-weight: 570;
+  --action-title-leading: 1.28;
+}
+
 .action-item {
   --action-color: transparent;
   --action-surface: var(--action-base-surface, var(--surface));
@@ -507,9 +514,9 @@ html.is-marquee-selecting * {
   display: -webkit-box;
   overflow: hidden;
   min-width: 0;
-  font-size: 13px;
-  font-weight: 570;
-  line-height: 1.28;
+  font-size: var(--action-title-size);
+  font-weight: var(--action-title-weight);
+  line-height: var(--action-title-leading);
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
 }
@@ -618,105 +625,50 @@ html.is-marquee-selecting * {
   opacity: 1;
 }
 
-/* The color tab grows from the card's edge; it is not a separate floating menu. */
-.action-item.has-quick-colors {
-  border-top-right-radius: 0;
-  outline: 1px solid var(--line);
-  outline-offset: -1px;
-}
-
-.action-item.has-quick-colors.is-color-tools-left {
-  border-top-left-radius: 0;
-  border-top-right-radius: 7px;
-}
-
-.action-quick-colors {
-  position: absolute;
-  z-index: 4;
-  right: 0;
-  bottom: calc(100% - 1px);
-  display: flex;
-  align-items: center;
-  gap: 2px;
-  border: 1px solid var(--line);
-  border-bottom: 0;
-  border-radius: 7px 7px 0 0;
-  padding: 3px 4px;
-  background: var(--action-surface, var(--surface));
-}
-
-.action-quick-colors::after {
-  position: absolute;
-  right: 0;
-  bottom: -1px;
-  left: 0;
-  height: 2px;
-  background: inherit;
-  content: "";
-  pointer-events: none;
-}
-
-.action-quick-colors button {
-  position: relative;
-  display: grid;
-  width: 20px;
-  height: 20px;
-  flex: 0 0 20px;
-  place-items: center;
-  border: 0;
-  border-radius: 4px;
-  padding: 0;
-  background: transparent;
-}
-
-.action-quick-colors button::before {
-  width: 15px;
-  height: 15px;
-  border: 1px solid rgba(21, 21, 21, .15);
-  border-radius: 50%;
-  background: var(--swatch-color);
-  content: "";
-  transition: transform 140ms ease-out;
-}
-
-.action-quick-colors button:hover::before { transform: scale(1.12); }
-.action-quick-colors button.is-active::after {
-  position: absolute;
-  top: 5px;
-  left: 8px;
-  width: 4px;
-  height: 7px;
-  border: solid var(--ink);
-  border-width: 0 1.5px 1.5px 0;
-  transform: rotate(45deg);
-  content: "";
-  pointer-events: none;
-}
-.action-quick-colors button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-
 .action-composer {
   display: flex;
-  align-items: center;
-  gap: 7px;
+  align-items: stretch;
+  gap: 0;
   height: 54px;
   min-height: 54px;
   border: 1px solid #cfcfc9;
-  border-radius: 9px;
-  padding: 5px;
-  background: rgba(255, 255, 255, 0.94);
-  box-shadow: 0 3px 10px rgba(32, 32, 27, 0.055);
+  border-radius: 7px;
+  padding: 0;
+  background: var(--surface);
 }
 
-.action-composer input {
+.action-composer-field {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  align-items: center;
+  padding: 7px 2px 7px 4px;
+}
+
+.action-composer textarea {
   width: 100%;
   min-width: 0;
+  min-height: calc(1em * var(--action-title-leading));
+  max-height: calc(2em * var(--action-title-leading));
+  margin: 0;
   border: 0;
-  padding: 7px 0;
+  padding: 0;
+  resize: none;
   background: transparent;
-  font-size: 12px;
+  color: var(--ink);
+  font-family: inherit;
+  font-size: var(--action-title-size);
+  font-weight: var(--action-title-weight);
+  line-height: var(--action-title-leading);
+  letter-spacing: normal;
 }
 
-.action-composer input:focus {
+.action-composer textarea::placeholder {
+  color: #6b6b65;
+  opacity: 1;
+}
+
+.action-composer textarea:focus {
   outline: none;
 }
 
@@ -725,6 +677,8 @@ html.is-marquee-selecting * {
   width: 32px;
   height: 32px;
   flex: 0 0 32px;
+  align-self: center;
+  margin-right: 3px;
   place-items: center;
   border: 0;
   border-radius: 8px;
@@ -801,6 +755,7 @@ html.is-marquee-selecting * {
 }
 
 .action-item.is-bucket {
+  --action-title-weight: 650;
   width: fit-content;
   max-width: min(100%, 360px);
   height: auto;
@@ -821,8 +776,6 @@ html.is-marquee-selecting * {
 
 .action-item.is-bucket .action-title {
   max-width: 270px;
-  font-size: 13px;
-  font-weight: 650;
 }
 
 .action-item.is-bucket .completion-button {
@@ -859,10 +812,19 @@ html.is-marquee-selecting * {
 }
 
 .someday-grid .action-composer {
+  --action-title-weight: 650;
   width: min(100%, 360px);
-  height: 44px;
-  min-height: 44px;
+  height: auto;
+  min-height: 42px;
   flex: 0 1 360px;
+}
+
+.someday-grid .action-composer-field {
+  padding: 6px 4px 6px 8px;
+}
+
+.someday-grid .action-composer textarea {
+  max-width: 270px;
 }
 
 .month-view {
@@ -980,12 +942,16 @@ html.is-marquee-selecting * {
   padding: 6px 2px 6px 6px;
 }
 
+.action-item.is-compact,
+.month-day .action-composer {
+  --action-title-size: 12px;
+  --action-title-weight: 680;
+  --action-title-leading: 1.18;
+}
+
 .action-item.is-compact .action-title {
   display: -webkit-box;
   overflow: hidden;
-  font-size: 12px;
-  font-weight: 680;
-  line-height: 1.18;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
 }
@@ -1002,11 +968,10 @@ html.is-marquee-selecting * {
 }
 
 .month-day .action-composer {
-  height: 34px;
+  height: auto;
   min-height: 34px;
   border: 1px solid #d8d8d2;
   border-radius: 7px;
-  padding: 3px;
 }
 
 .action-item.is-complete,
@@ -1016,9 +981,9 @@ html.is-marquee-selecting * {
   background: var(--action-surface);
 }
 
-.month-day .action-composer input {
-  padding: 4px 0;
-  font-size: 10px;
+.month-day .action-composer-field {
+  align-items: flex-start;
+  padding: 6px 2px 6px 6px;
 }
 
 .month-day .action-composer button {

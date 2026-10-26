@@ -3,6 +3,7 @@ import {
   lazy,
   Suspense,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -185,7 +186,6 @@ function ActionItem({
   dropAfter = false,
   onOpen,
   onComplete,
-  onColorChange,
   onDragStart,
   onDragEnd,
   onDragPosition,
@@ -201,7 +201,6 @@ function ActionItem({
   dropAfter?: boolean;
   onOpen: (event: ReactMouseEvent<HTMLButtonElement>) => void;
   onComplete: () => void;
-  onColorChange: (color: ActionColor) => void;
   onDragStart: (event: DragEvent<HTMLDivElement>) => string[];
   onDragEnd: () => void;
   onDragPosition: (event: DragEvent<HTMLDivElement>) => void;
@@ -209,8 +208,6 @@ function ActionItem({
   onContextMenu: (x: number, y: number) => void;
 }) {
   const [celebrating, setCelebrating] = useState(false);
-  const [showColors, setShowColors] = useState(false);
-  const [colorsAlignLeft, setColorsAlignLeft] = useState(false);
   const previousCompleted = useRef(action.completed);
   useEffect(() => {
     if (action.completed && !previousCompleted.current) setCelebrating(true);
@@ -220,30 +217,14 @@ function ActionItem({
   const style = {
     "--action-color": ACTION_COLOR_VALUES[action.color],
     "--action-base-surface": action.color === "plain" ? "#ffffff" : ACTION_COLOR_VALUES[action.color],
-    ...(showColors ? { zIndex: 12 } : {}),
   } as CSSProperties;
 
   return (
     <div
-      className={`action-item ${compact ? "is-compact" : ""} ${bucket ? "is-bucket" : ""} ${isDragging ? "is-dragging" : ""} ${isSelected ? "is-selected" : ""} ${dropBefore ? "is-drop-before" : ""} ${dropAfter ? "is-drop-after" : ""} ${action.completed ? "is-complete" : ""} ${celebrating ? "is-celebrating" : ""} ${showColors && !isDragging ? "has-quick-colors" : ""} ${colorsAlignLeft ? "is-color-tools-left" : ""}`}
+      className={`action-item ${compact ? "is-compact" : ""} ${bucket ? "is-bucket" : ""} ${isDragging ? "is-dragging" : ""} ${isSelected ? "is-selected" : ""} ${dropBefore ? "is-drop-before" : ""} ${dropAfter ? "is-drop-after" : ""} ${action.completed ? "is-complete" : ""} ${celebrating ? "is-celebrating" : ""}`}
       data-action-id={action.id}
       aria-selected={isSelected}
       draggable
-      onPointerEnter={(event) => {
-        if (event.pointerType === "touch" || isDragging) return;
-        setColorsAlignLeft(event.currentTarget.getBoundingClientRect().right < 136);
-        setShowColors(true);
-      }}
-      onPointerLeave={(event) => {
-        if (!event.currentTarget.contains(document.activeElement) || !document.activeElement?.matches(":focus-visible")) setShowColors(false);
-      }}
-      onFocus={(event) => {
-        setColorsAlignLeft(event.currentTarget.getBoundingClientRect().right < 136);
-        setShowColors(true);
-      }}
-      onBlur={(event) => {
-        if (!event.currentTarget.contains(event.relatedTarget)) setShowColors(false);
-      }}
       onContextMenu={(event) => {
         event.preventDefault();
         event.stopPropagation();
@@ -257,7 +238,6 @@ function ActionItem({
       }}
       onAnimationEnd={(event) => { if (event.animationName === "completion-settle") setCelebrating(false); }}
       onDragStart={(event) => {
-        setShowColors(false);
         const actionIds = onDragStart(event);
         event.dataTransfer.effectAllowed = "move";
         event.dataTransfer.setData("text/action-id", action.id);
@@ -282,31 +262,6 @@ function ActionItem({
       <button className="action-open" type="button" onClick={onOpen}>
         <span className="action-title"><span>{action.title}</span></span>
       </button>
-      {showColors && !isDragging && (
-        <div
-          className="action-quick-colors"
-          role="group"
-          aria-label="Quick action color"
-          style={colorsAlignLeft ? { left: 0, right: "auto" } : undefined}
-          onMouseDown={(event) => { event.preventDefault(); event.stopPropagation(); }}
-          onKeyDown={(event) => {
-            if (event.key === "Escape") { event.stopPropagation(); setShowColors(false); }
-          }}
-        >
-          {(Object.keys(ACTION_COLOR_VALUES) as ActionColor[]).map((color) => (
-            <button
-              key={color}
-              type="button"
-              className={action.color === color ? "is-active" : ""}
-              style={{ "--swatch-color": color === "plain" ? "#f8f8f5" : ACTION_COLOR_VALUES[color] } as CSSProperties}
-              aria-label={`Use ${color} color`}
-              aria-pressed={action.color === color}
-              title={color === "plain" ? "No color" : color[0].toUpperCase() + color.slice(1)}
-              onClick={(event) => { event.stopPropagation(); if (color !== action.color) onColorChange(color); }}
-            />
-          ))}
-        </div>
-      )}
       <button
         className="completion-button"
         type="button"
@@ -334,6 +289,33 @@ function ActionComposer({
   onCancel: () => void;
 }) {
   const [title, setTitle] = useState("");
+  const fieldRef = useRef<HTMLTextAreaElement>(null);
+
+  function fitTitle() {
+    const field = fieldRef.current;
+    if (!field) return;
+    const scrollTop = field.scrollTop;
+    const lineHeight = parseFloat(getComputedStyle(field).lineHeight);
+    field.style.height = "auto";
+    const lines = Math.max(1, Math.round(field.scrollHeight / lineHeight));
+    field.style.height = `${Math.min(2, lines) * lineHeight}px`;
+    field.scrollTop = field.selectionEnd === field.value.length ? field.scrollHeight : scrollTop;
+  }
+
+  useLayoutEffect(fitTitle, [title]);
+  useEffect(() => {
+    const field = fieldRef.current;
+    if (!field) return;
+    let lastWidth = field.getBoundingClientRect().width;
+    const observer = new ResizeObserver(() => {
+      const width = field.getBoundingClientRect().width;
+      if (width === lastWidth) return;
+      lastWidth = width;
+      fitTitle();
+    });
+    observer.observe(field);
+    return () => observer.disconnect();
+  }, []);
 
   function submit(event: FormEvent) {
     event.preventDefault();
@@ -345,16 +327,24 @@ function ActionComposer({
 
   return (
     <form className="action-composer" onSubmit={submit}>
-      <input
-        autoFocus
-        value={title}
-        onChange={(event) => setTitle(event.target.value)}
-        onKeyDown={(event) => {
-          if (event.key === "Escape") onCancel();
-        }}
-        placeholder="Type an action…"
-        aria-label="New action title"
-      />
+      <div className="action-composer-field">
+        <textarea
+          ref={fieldRef}
+          rows={1}
+          autoFocus
+          value={title}
+          onChange={(event) => setTitle(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === "Escape") onCancel();
+            if (event.key === "Enter" && !event.nativeEvent.isComposing) {
+              event.preventDefault();
+              event.currentTarget.form?.requestSubmit();
+            }
+          }}
+          placeholder="Type an action…"
+          aria-label="New action title"
+        />
+      </div>
       <button type="submit" aria-label="Create action" title="Create action">
         <span aria-hidden="true">↵</span>
       </button>
@@ -1207,7 +1197,6 @@ export default function App() {
         setSelectedId(action.id);
       },
       onComplete: () => updateAction(action.id, { completed: !action.completed }),
-      onColorChange: (color: ActionColor) => updateAction(action.id, { color }),
       onContextMenu: (x: number, y: number) => setContextMenu({ id: action.id, x, y }),
       onDragStart: () => {
         const ids = selectedActionIds.has(action.id)
